@@ -58,6 +58,14 @@ export interface PathoVisual {
   strain?: Record<string, number>
   caption: string
   simpleCaption: string
+  /** zone douloureuse sur l'amplitude (degrés) */
+  painZone?: [number, number]
+  /** au moment où ça fait mal : ce qui souffre, ce qui travaille, ce qu'on va faire (mots simples) */
+  suffers?: string[]
+  works?: string[]
+  todo?: string
+  /** affichage par défaut : articulation (muscles estompés) ou complet */
+  view?: 'deep' | 'complete'
 }
 
 export interface JointDef {
@@ -80,7 +88,8 @@ export interface JointDef {
   customs: CustomDef[]
   /** muscles actifs selon le sens du mouvement */
   actions: { increasing: MuscleGroup; decreasing: MuscleGroup; hold: MuscleGroup }
-  camera: { pos: V3; target: V3; fov?: number }
+  /** frame : largeur et hauteur (m) à garder visibles */
+  camera: { pos: V3; target: V3; fov?: number; frame?: [number, number] }
   arc: { seg: string; radius: number; dof: string }
   pathologies: Record<string, PathoVisual>
   /** zone à rogner en hauteur pour ne garder que la région (m) */

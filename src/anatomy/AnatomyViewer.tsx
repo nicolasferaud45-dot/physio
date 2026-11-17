@@ -30,6 +30,9 @@ export interface ViewerProps {
   /** tonalité du fond (comparaison sain / pathologie) */
   tone?: 'ok' | 'bad' | 'neutral'
   className?: string
+  /** angle piloté de l'extérieur (vues synchronisées) */
+  angleRef?: React.MutableRefObject<number>
+  onCanvas?: (c: HTMLCanvasElement) => void
 }
 
 // ------------------------------------------------------------------ utilitaires
@@ -386,12 +389,16 @@ function Scene(p: ViewerProps & { an: Anatomy; labelSink: React.MutableRefObject
     const t = v3(J.camera.target)
     const pos = v3(J.camera.pos)
     if (p.side === 'G') { pos.x = -pos.x; t.x = -t.x }
-    const dir = pos.clone().sub(t)
+    const dir = pos.clone().sub(t).normalize()
     const aspect = size.width / Math.max(1, size.height)
-    let k = aspect < 1.1 ? 1.15 / Math.max(0.5, aspect) : 1
-    if (p.mode === 'exploded') k *= aspect < 1.3 ? 2.3 : 1.65
+    const fov = J.camera.fov ?? 32
+    const tan = Math.tan(THREE.MathUtils.degToRad(fov / 2))
+    let [fw, fh] = J.camera.frame ?? [0.3, 0.36]
+    if (p.mode === 'exploded') fw = fw * 2 + 0.42
+    const k = Math.max(fh / (2 * tan), fw / (2 * tan * aspect)) * 1.08
+    if (p.mode === 'exploded') dir.set(0, 0.12, 1).normalize()
     cam.position.copy(t.clone().addScaledVector(dir, k))
-    cam.fov = J.camera.fov ?? 32; cam.near = 0.01; cam.far = 20; cam.updateProjectionMatrix()
+    cam.fov = fov; cam.near = 0.01; cam.far = 20; cam.updateProjectionMatrix()
     cam.lookAt(t)
     ctl.current?.target.copy(t); ctl.current?.update()
   }, [J, p.side, p.mode, size.width, size.height, camera])
@@ -405,7 +412,9 @@ function Scene(p: ViewerProps & { an: Anatomy; labelSink: React.MutableRefObject
     const s = st.current
     dt = Math.min(dt, 0.05)
     // angle
-    if (p.playing) {
+    if (p.angleRef) {
+      s.angle += (Math.min(hi, Math.max(lo, p.angleRef.current)) - s.angle) * Math.min(1, dt * 14)
+    } else if (p.playing) {
       s.t += dt * (p.speed ?? 1) / 5
       const u = (1 - Math.cos(s.t * Math.PI * 2)) / 2
       s.angle = lo + (hi - lo) * u
@@ -517,7 +526,7 @@ function Scene(p: ViewerProps & { an: Anatomy; labelSink: React.MutableRefObject
     for (const m of ind.musc) {
       const mu = m.d.muscle!
       const a = mu.act
-      const show = p.indicators && p.layers.muscles > 0.05 && a > 0.35
+      const show = p.indicators && (p.layers.muscles >= 0.3 || p.mode === 'exploded') && a > 0.35
       const ax = mu.axis
       const len = ax.tmax - ax.tmin
       const pA = ax.c.clone().addScaledVector(ax.dir, ax.tmin + len * 0.12), pB = ax.c.clone().addScaledVector(ax.dir, ax.tmin + len * 0.88)
@@ -542,7 +551,8 @@ function Scene(p: ViewerProps & { an: Anatomy; labelSink: React.MutableRefObject
       u.c.add(C); u.n++; u.act = Math.max(u.act, show ? a : 0); units.set(uid, u)
     }
     const deep = p.layers.muscles < 0.5
-    for (const [uid, u] of units) {
+    const ranked = [...units.entries()].sort((a, b) => b[1].act - a[1].act)
+    for (const [uid, u] of (p.compact ? ranked.slice(0, 2) : ranked)) {
       const def = J.units.find((x) => x.id === uid)
       if (!def) continue
       const active = u.act > 0.35
@@ -651,7 +661,8 @@ export default function AnatomyViewer(p: ViewerProps) {
       const x = (v.x * 0.5 + 0.5) * W, y = (-v.y * 0.5 + 0.5) * H
       const isArc = l.id === 'arc'
       const side = x < W / 2 ? -1 : 1
-      const w = Math.min(230, 12 + l.text.length * 7.2), h = 26
+      const caps = l.text === l.text.toUpperCase() ? 8.6 : 7.4
+      const w = Math.min(260, 14 + l.text.length * caps), h = 26
       let lx = isArc ? x + 10 : x + side * (p.compact ? 40 : 70) - (side < 0 ? w : 0), ly = y - h / 2 - (isArc ? 0 : 18)
       lx = Math.max(6, Math.min(W - w - 6, lx))
       for (let it = 0; it < 12 && used.some((u) => Math.abs(u.x - lx) < (u.w + w) / 2 + 2 && Math.abs(u.y - ly) < h + 2); it++) ly += h + 3
@@ -671,7 +682,7 @@ export default function AnatomyViewer(p: ViewerProps) {
       {!an && <div className="anat-loading"><span className="ai-badge run">Chargement du modèle anatomique…</span></div>}
       {an && (
         <Canvas dpr={[1, 2]} gl={{ antialias: true, alpha: true, toneMapping: THREE.ACESFilmicToneMapping, toneMappingExposure: 1.05, preserveDrawingBuffer: true }}
-          camera={{ position: [0, 0.5, 1], fov: 32 }} onCreated={({ camera }) => { camRef.current = camera }}>
+          camera={{ position: [0, 0.5, 1], fov: 32 }} onCreated={({ camera, gl }) => { camRef.current = camera; p.onCanvas?.(gl.domElement) }}>
           <Scene {...p} an={an} labelSink={labelSink} onFrame={draw} />
         </Canvas>
       )}

@@ -8,7 +8,7 @@ import { Icon } from '../components/Icon'
 
 const PRESETS: { id: string; label: string; mode: ViewMode; layers: Layers }[] = [
   { id: 'complete', label: 'Vue complète', mode: 'complete', layers: { skin: 0.15, muscles: 1, ligaments: 1, bones: 1 } },
-  { id: 'deep', label: 'Articulation', mode: 'complete', layers: { skin: 0, muscles: 0.25, ligaments: 1, bones: 1 } },
+  { id: 'deep', label: 'Articulation', mode: 'complete', layers: { skin: 0, muscles: 0.06, ligaments: 1, bones: 1 } },
   { id: 'exploded', label: 'Vue éclatée', mode: 'exploded', layers: { skin: 0, muscles: 1, ligaments: 1, bones: 1 } },
   { id: 'xray', label: 'Rayons X', mode: 'xray', layers: { skin: 0.08, muscles: 0.12, ligaments: 0.6, bones: 1 } },
 ]

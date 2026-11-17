@@ -7,6 +7,17 @@ import type { PresentView, Session } from '../state/session'
 import ExerciseViewer from './ExerciseViewer'
 
 const Shoulder3D = lazy(() => import('../three/Shoulder3D'))
+const AnatomyViewer = lazy(() => import('../anatomy/AnatomyViewer'))
+import { jointForRegion } from '../anatomy/registry'
+import type { Layers, ViewMode } from '../anatomy/AnatomyViewer'
+import { AngleTrack } from '../components/AngleTrack'
+
+const LAYER_PRESETS: { id: string; label: string; mode: ViewMode; layers: Layers }[] = [
+  { id: 'deep', label: 'Articulation', mode: 'complete', layers: { skin: 0, muscles: 0.08, ligaments: 1, bones: 1 } },
+  { id: 'complete', label: 'Vue complète', mode: 'complete', layers: { skin: 0.15, muscles: 1, ligaments: 1, bones: 1 } },
+  { id: 'xray', label: 'Rayons X', mode: 'xray', layers: { skin: 0.08, muscles: 0.12, ligaments: 0.6, bones: 1 } },
+  { id: 'exploded', label: 'Vue éclatée', mode: 'exploded', layers: { skin: 0, muscles: 1, ligaments: 1, bones: 1 } },
+]
 
 interface Props {
   s: Session
@@ -45,6 +56,38 @@ export default function Presentation({ s, update, onExit, readOnly }: Props) {
   const [pen, setPen] = useState<Pen>(null)
   const [toast, setToast] = useState<string | null>(null)
   const [showEx, setShowEx] = useState(false)
+  // --- articulation anatomique réelle (genou, …)
+  const J = jointForRegion(patho.region)
+  const jv = J?.pathologies[patho.id] ?? null
+  const dof = J?.dofs[0]
+  const [preset, setPreset] = useState(jv?.view === 'complete' ? 'complete' : 'deep')
+  const [jl, setJl] = useState<{ layers: Layers; mode: ViewMode }>(() => { const p = LAYER_PRESETS.find((x) => x.id === (jv?.view === 'complete' ? 'complete' : 'deep'))!; return { layers: p.layers, mode: p.mode } })
+  const [labelsOn, setLabelsOn] = useState(true)
+  const [slowZone, setSlowZone] = useState(true)
+  const [stopZone, setStopZone] = useState(false)
+  const [jAngle, setJAngle] = useState(0)
+  const [jPatient, setJPatient] = useState(0)
+  const angleRef = useRef(0)
+  const loop = useRef({ t: 0, inZone: false })
+  const pain = jv?.painZone ?? null
+  useEffect(() => {
+    if (!J || !dof || !playing) return
+    let raf = 0, last = performance.now(), lastUi = 0
+    const tick = (now: number) => {
+      const dt = Math.min(0.05, (now - last) / 1000); last = now
+      const a = angleRef.current
+      const z = !!pain && a >= pain[0] && a <= pain[1]
+      if (z && !loop.current.inZone && stopZone) { loop.current.inZone = true; setPlaying(false); setJAngle(Math.round(a)); return }
+      loop.current.inZone = z
+      loop.current.t += dt / 6 * (z && slowZone ? 0.35 : 1)
+      const u = (1 - Math.cos(loop.current.t * Math.PI * 2)) / 2
+      angleRef.current = dof.min + (dof.max - dof.min) * u
+      if (now - lastUi > 90) { lastUi = now; setJAngle(Math.round(angleRef.current)) }
+      raf = requestAnimationFrame(tick)
+    }
+    raf = requestAnimationFrame(tick)
+    return () => cancelAnimationFrame(raf)
+  }, [J, dof, playing, pain, slowZone, stopZone])
   const canvases = useRef<{ normal?: HTMLCanvasElement; patho?: HTMLCanvasElement }>({})
   const draw = useRef<HTMLCanvasElement>(null)
   const panes = useRef<HTMLDivElement>(null)
@@ -121,7 +164,11 @@ export default function Presentation({ s, update, onExit, readOnly }: Props) {
 
   const blocked = angles.patho >= sickMax - 3 && patho.visual === 'capsulite'
   const inArc = patho.visual === 'conflit' && angles.patho >= 60 && angles.patho <= 120
-  const yours = readOnly ? 'Mon épaule' : 'Votre épaule'
+  const regionWord = J ? J.label.toLowerCase() : 'épaule'
+  const yours = readOnly ? `Mon ${regionWord}`.replace('Mon épaule', 'Mon épaule') : `Votre ${regionWord}`
+  const jInPain = !!pain && jPatient >= pain[0] && jPatient <= pain[1]
+  const jBlocked = !!jv?.rom && jAngle > jv.rom[1] + 2
+  const jStatus = jBlocked ? (simple ? ' · ne va pas plus loin' : ' · limitation') : jInPain ? (simple ? ' · ça fait mal' : ' · zone douloureuse') : ''
 
   const pane = (kind: 'normal' | 'patho') => {
     const isNormal = kind === 'normal'
@@ -132,10 +179,16 @@ export default function Presentation({ s, update, onExit, readOnly }: Props) {
         <div className={`pane-tag ${isNormal ? 'ok' : 'bad'}`}>
           <i aria-hidden="true" />
           <span>{isNormal ? 'Normal' : patho.label}</span>
-          <span className="pane-sub">{isNormal ? (patho.region === 'epaule' ? 'Épaule saine' : 'Fonctionnement normal') : yours}</span>
-          {patho.visual && <span className="pane-angle">{angle}°{status}</span>}
+          <span className="pane-sub">{isNormal ? (J ? `${J.label} sain` : patho.region === 'epaule' ? 'Épaule saine' : 'Fonctionnement normal') : yours}</span>
+          {J && jv ? <span className="pane-angle">{isNormal ? jAngle : jPatient}°{isNormal ? '' : jStatus}</span> : patho.visual && <span className="pane-angle">{angle}°{status}</span>}
         </div>
-        {patho.visual ? (
+        {J && jv ? (
+          <Suspense fallback={<div className="pane-loading muted">Chargement du modèle 3D…</div>}>
+            <AnatomyViewer joint={J} pathology={isNormal ? null : patho.id} layers={jl.layers} mode={jl.mode} labels={labelsOn} indicators
+              side={s.side ?? 'D'} simple={simple} playing={false} angle={0} angleRef={angleRef} compact={view === 'compare'} tone={isNormal ? 'ok' : 'bad'}
+              onAngle={isNormal ? undefined : setJPatient} onCanvas={(c) => { canvases.current[kind] = c }} />
+          </Suspense>
+        ) : patho.visual ? (
           <Suspense fallback={<div className="pane-loading muted">Chargement du modèle 3D…</div>}>
             <Shoulder3D
               visual={patho.visual} sick={!isNormal} layers={pres.layers} targetAngle={target} playing={playing}
@@ -181,7 +234,29 @@ export default function Presentation({ s, update, onExit, readOnly }: Props) {
           </div>
 
           <div className="pv-bar" role="toolbar" aria-label="Commandes">
-            {patho.visual && <>
+            {J && jv && dof && <>
+              <button className="icon-btn play" onClick={() => { loop.current.inZone = true; setPlaying((v) => !v) }} aria-label={playing ? 'Mettre en pause' : 'Animer le mouvement'}>
+                <Icon name={playing ? 'pause' : 'play'} size={22} />
+              </button>
+              <AngleTrack label={dof.label} min={dof.min} max={dof.max} value={jAngle} pain={pain} rom={jv.rom ?? null}
+                status={jInPain ? (simple ? 'ça fait mal' : 'zone douloureuse') : null}
+                onChange={(v) => { setPlaying(false); angleRef.current = v; setJAngle(v) }} />
+              {pain && <div className="pv-chips">
+                <button aria-pressed={slowZone} onClick={() => setSlowZone(!slowZone)}>Ralentir dans la zone rouge</button>
+                <button aria-pressed={stopZone} onClick={() => setStopZone(!stopZone)}>Arrêter quand ça fait mal</button>
+              </div>}
+              <Popover label="Calques" icon={<Icon name="grid" size={18} />} width={300}>
+                <span className="eyebrow">Vue</span>
+                <div className="row wrap" style={{ gap: 6 }}>{LAYER_PRESETS.map((p) => <button key={p.id} className="chip" aria-pressed={preset === p.id} style={preset === p.id ? { background: 'var(--blue)', color: '#fff' } : undefined} onClick={() => { setPreset(p.id); setJl({ layers: p.layers, mode: p.mode }) }}>{p.label}</button>)}</div>
+                <span className="eyebrow">Opacité</span>
+                {([['skin', 'Peau'], ['muscles', 'Muscles et tendons'], ['ligaments', 'Ligaments et cartilage'], ['bones', 'Os']] as const).map(([k, l]) => (
+                  <label key={k} className="layer-slider"><span className="row"><span className="grow">{l}</span><b>{Math.round(jl.layers[k] * 100)} %</b></span>
+                    <input type="range" min={0} max={100} value={Math.round(jl.layers[k] * 100)} onChange={(e) => { setPreset(''); setJl({ ...jl, layers: { ...jl.layers, [k]: +e.target.value / 100 } }) }} /></label>
+                ))}
+                <CheckRow label="Étiquettes" checked={labelsOn} onChange={() => setLabelsOn(!labelsOn)} />
+              </Popover>
+            </>}
+            {!(J && jv) && patho.visual && <>
               <button className="icon-btn play" onClick={() => setPlaying((v) => !v)} aria-label={playing ? 'Mettre en pause' : 'Animer le mouvement'}>
                 <Icon name={playing ? 'pause' : 'play'} size={22} />
               </button>
@@ -229,14 +304,32 @@ export default function Presentation({ s, update, onExit, readOnly }: Props) {
                 <p>{t.normal.body}</p>
               </div>
             )}
-            {view !== 'normal' && (
+            {view !== 'normal' && !(J && jv && jInPain) && (
               <div className="explain-block bad">
                 <span className="explain-label"><i />{readOnly ? 'Chez moi' : 'Chez vous'}</span>
                 <strong>{t.patho.title}</strong>
                 <p>{t.patho.body}</p>
               </div>
             )}
-            {patho.visual && (
+            {J && jv && view !== 'normal' && (jInPain ? (
+              <div className="moment" aria-live="polite">
+                <span className="eyebrow">Au moment où ça fait mal · {jPatient}°</span>
+                {jv.suffers && <div className="blk bad"><strong>Ce qui souffre</strong>{jv.suffers.map((x) => <span key={x}><i className="d" style={{ background: '#E5341F' }} />{x}</span>)}</div>}
+                {jv.works && <div className="blk work"><strong>Ce qui travaille</strong>{jv.works.map((x) => <span key={x}><i className="d" style={{ background: '#F2B430' }} />{x}</span>)}</div>}
+                {jv.todo && <div className="blk ok"><strong>Ce qu'on va faire</strong><span>{jv.todo}</span></div>}
+              </div>
+            ) : (
+              <div className="explain-block bad"><span className="explain-label"><i />Ce que l'on voit</span><p>{simple ? jv.simpleCaption : jv.caption}</p>
+                {pain && <span className="small muted">Lancez le mouvement : la zone rouge ({pain[0]}–{pain[1]}°) s'allume quand ça fait mal.</span>}</div>
+            ))}
+            {J && jv?.rom && dof && (
+              <div className="rom">
+                <span className="small" style={{ fontWeight: 600 }}>{dof.label}</span>
+                <div className="row"><span className="small" style={{ width: 92, color: 'var(--green-ink)', fontWeight: 600 }}>Normal</span><div className="bar"><span style={{ width: '100%', background: '#2E7D5B' }} /></div><span className="small" style={{ width: 40, fontWeight: 700 }}>{dof.max}°</span></div>
+                <div className="row"><span className="small" style={{ width: 92, color: 'var(--red-ink)', fontWeight: 600 }}>{yours}</span><div className="bar"><span style={{ width: `${Math.round((jv.rom[1] / dof.max) * 100)}%`, background: '#C2412D' }} /></div><span className="small" style={{ width: 40, fontWeight: 700 }}>{jv.rom[1]}°</span></div>
+              </div>
+            )}
+            {!J && patho.visual && (
               <div className="rom">
                 <span className="small" style={{ fontWeight: 600 }}>{simple ? 'Jusqu\'où le bras monte sur le côté' : 'Amplitude d\'abduction'}</span>
                 <div className="row"><span className="small" style={{ width: 92, color: 'var(--green-ink)', fontWeight: 600 }}>Normal</span><div className="bar"><span style={{ width: '100%', background: '#2E7D5B' }} /></div><span className="small" style={{ width: 40, fontWeight: 700 }}>180°</span></div>
