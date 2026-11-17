@@ -184,7 +184,7 @@ export default function Presentation({ s, update, onExit, readOnly }: Props) {
         </div>
         {J && jv ? (
           <Suspense fallback={<div className="pane-loading muted">Chargement du modèle 3D…</div>}>
-            <AnatomyViewer joint={J} pathology={isNormal ? null : patho.id} layers={jl.layers} mode={jl.mode} labels={labelsOn} indicators
+            <AnatomyViewer joint={J} motion={jv.motion} pathology={isNormal ? null : patho.id} layers={jl.layers} mode={jl.mode} labels={labelsOn} indicators
               side={s.side ?? 'D'} simple={simple} playing={false} angle={0} angleRef={angleRef} compact={view === 'compare'} tone={isNormal ? 'ok' : 'bad'}
               onAngle={isNormal ? undefined : setJPatient} onCanvas={(c) => { canvases.current[kind] = c }} />
           </Suspense>

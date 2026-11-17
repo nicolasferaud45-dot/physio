@@ -1,6 +1,6 @@
 // Démonstrateur du cahier des charges « Visualisation anatomique 3D » : calques, vue éclatée, rayons X,
 // animation de flexion, angle manuel, sain / pathologie, étiquettes, droite / gauche.
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import AnatomyViewer, { type Layers, type ViewMode } from '../anatomy/AnatomyViewer'
 import { JOINTS } from '../anatomy/registry'
 import { pathologyById } from '../data/catalog'
@@ -23,11 +23,15 @@ export default function AnatomyLab({ jointId = 'genou', onClose }: { jointId?: s
   const [live, setLive] = useState(0)
   const [patho, setPatho] = useState<string | null>(null)
   const [choice, setChoice] = useState<string>(Object.keys(J.pathologies)[0])
+  useEffect(() => { setChoice(Object.keys(J.pathologies)[0]); setPatho(null); setMotionSel(J.dofs[0].id) }, [J])
   const [labels, setLabels] = useState(true)
   const [indicators, setIndicators] = useState(true)
   const [side, setSide] = useState<'D' | 'G'>('D')
   const [simple, setSimple] = useState(false)
   const pv = patho ? J.pathologies[patho] : null
+  const [motionSel, setMotionSel] = useState(J.dofs[0].id)
+  const motion = pv?.motion ?? motionSel
+  const dof = J.dofs.find((d) => d.id === motion) ?? J.dofs[0]
 
   const applyPreset = (id: string) => { const p = PRESETS.find((x) => x.id === id)!; setPreset(id); setMode(p.mode); setLayers(p.layers) }
   const slider = (k: keyof Layers, label: string, swatch: string) => (
@@ -66,14 +70,15 @@ export default function AnatomyLab({ jointId = 'genou', onClose }: { jointId?: s
         </aside>
         <main className="lab-stage">
           <AnatomyViewer joint={J} pathology={patho} layers={layers} mode={mode} labels={labels} indicators={indicators} side={side} simple={simple}
-            playing={playing} angle={angle} onAngle={setLive} tone={patho ? 'bad' : 'ok'} />
+            playing={playing} angle={angle} onAngle={setLive} tone={patho ? 'bad' : 'ok'} motion={motion} />
         </main>
         <aside className="lab-panel" aria-label="Animation et pathologie">
           <span className="eyebrow">Mouvement</span>
           <button className="btn primary" onClick={() => { if (playing) setAngle(live); setPlaying(!playing) }}><Icon name={playing ? 'pause' : 'play'} />{playing ? 'Pause' : 'Lecture'}</button>
           <label className="lab-row">
-            <span className="row"><span className="grow">{J.dofs[0].label}</span><b>{playing ? live : angle}°</b></span>
-            <input type="range" min={J.dofs[0].min} max={J.dofs[0].max} value={playing ? live : angle} onChange={(e) => { setPlaying(false); setAngle(+e.target.value) }} />
+            {J.dofs.length > 1 && !pv?.motion && <select className="lab-select" value={motionSel} onChange={(e) => setMotionSel(e.target.value)}>{J.dofs.map((d) => <option key={d.id} value={d.id}>{d.label}</option>)}</select>}
+            <span className="row"><span className="grow">{dof.label}</span><b>{playing ? live : angle}°</b></span>
+            <input type="range" min={dof.min} max={dof.max} value={playing ? live : angle} onChange={(e) => { setPlaying(false); setAngle(+e.target.value) }} />
             <span className="small muted">Figez le mouvement à l'angle où le patient a mal.</span>
           </label>
           <span className="eyebrow" style={{ marginTop: 8 }}>État</span>

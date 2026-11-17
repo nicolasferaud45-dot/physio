@@ -32,6 +32,8 @@ export interface ViewerProps {
   className?: string
   /** angle piloté de l'extérieur (vues synchronisées) */
   angleRef?: React.MutableRefObject<number>
+  /** degré de liberté animé */
+  motion?: string
   onCanvas?: (c: HTMLCanvasElement) => void
 }
 
@@ -85,10 +87,13 @@ interface Deform {
   rest: Float32Array
   restN: Float32Array
   w: Float32Array
+  /** segments de départ / d'arrivée du mélange, par sommet (index dans la liste des segments, 0 = fixe) */
+  sa: Uint8Array
+  sb: Uint8Array
   /** profil le long du muscle (0 aux extrémités, 1 au centre) et direction radiale pour le gonflement */
   prof?: Float32Array
   radial?: Float32Array
-  muscle?: { group: MuscleGroup; label: string; simple: string; name: string; unit?: string; axis: ReturnType<typeof principalAxis>; mat: THREE.MeshPhysicalMaterial; act: number; wA: number; wB: number }
+  muscle?: { group: MuscleGroup; label: string; simple: string; name: string; unit?: string; axis: ReturnType<typeof principalAxis>; mat: THREE.MeshPhysicalMaterial; act: number; ends: { p: THREE.Vector3; sa: number; sb: number; w: number }[] }
 }
 interface Rigid { obj: THREE.Object3D; seg: string }
 interface LigMesh { def: LigamentDef; mesh: THREE.Mesh; stubs: [THREE.Mesh, THREE.Mesh]; rest: number; mat: THREE.MeshPhysicalMaterial }
@@ -119,7 +124,7 @@ function paintBone(g: THREE.BufferGeometry, test?: (x: number, y: number, z: num
   g.setAttribute('color', new THREE.BufferAttribute(col, 3))
 }
 
-function build(an: Anatomy, J: JointDef, pv: PathoVisual | null): Built {
+function build(an: Anatomy, J: JointDef, pv: PathoVisual | null, pathologyId: string | null): Built {
   const mats = makeMaterials(false)
   const xmats = makeMaterials(true)
   const fade = { min: { value: J.clip?.minY ?? -10 }, max: { value: J.clip?.maxY ?? 10 } }
@@ -130,27 +135,43 @@ function build(an: Anatomy, J: JointDef, pv: PathoVisual | null): Built {
   const rigids: Rigid[] = []
   const ligs: LigMesh[] = []
   const disposables: { dispose(): void }[] = []
-  const B = J.blend
-  const bc = v3(B.center), bd = v3(B.dir).normalize()
+  const rules = (Array.isArray(J.blend) ? J.blend : [J.blend]).map((r) => ({ ...r, c: v3(r.center), d: v3(r.dir).normalize() }))
+  const segIdx = (id?: string) => (id ? 1 + J.segments.findIndex((x) => x.id === id) : 0)
+  /** poids de mélange d'un point : segments a et b, poids vers b */
+  const weigh = (x: number, y: number, z: number) => {
+    for (const r of rules) {
+      if (!r.inRegion(x, y, z)) continue
+      const d = (x - r.c.x) * r.d.x + (y - r.c.y) * r.d.y + (z - r.c.z) * r.d.z
+      return { sa: segIdx(r.from), sb: segIdx(r.seg), w: 1 - smooth(-r.band, r.band, d) }
+    }
+    return { sa: 0, sb: 0, w: 0 }
+  }
+  const mirrorGeo = (g: THREE.BufferGeometry) => {
+    const pos = g.getAttribute('position') as THREE.BufferAttribute
+    for (let k = 0; k < pos.count; k++) pos.setX(k, -pos.getX(k))
+    const idx = g.getIndex()!
+    for (let f = 0; f < idx.count; f += 3) { const a = idx.getX(f + 1); idx.setX(f + 1, idx.getX(f + 2)); idx.setX(f + 2, a) }
+    g.computeVertexNormals()
+    return g
+  }
 
   // --- déformables (muscles, tendons, peau) : géométrie propre + poids de mélange entre segments
-  const makeDeform = (name: string, kind: 'muscle' | 'tendon' | 'skin', meta?: { group: MuscleGroup; label: string; simple: string; unit?: string }): Deform | null => {
+  const makeDeform = (name: string, kind: 'muscle' | 'tendon' | 'skin', meta?: { group: MuscleGroup; label: string; simple: string; unit?: string }, mirror = false): Deform | null => {
     const g0 = an.geometry(name)
     if (!g0) return null
     const g = g0.clone(); disposables.push(g)
+    if (mirror) mirrorGeo(g)
     const pos = g.getAttribute('position') as THREE.BufferAttribute
     const nor = g.getAttribute('normal') as THREE.BufferAttribute
     const rest = new Float32Array(pos.array as Float32Array)
     const restN = new Float32Array(nor.array as Float32Array)
-    const w = new Float32Array(pos.count)
+    const w = new Float32Array(pos.count), sa = new Uint8Array(pos.count), sb = new Uint8Array(pos.count)
     for (let k = 0; k < pos.count; k++) {
-      const x = rest[k * 3], y = rest[k * 3 + 1], z = rest[k * 3 + 2]
-      if (!B.inRegion(x, y, z)) { w[k] = 0; continue }
-      const d = (x - bc.x) * bd.x + (y - bc.y) * bd.y + (z - bc.z) * bd.z
-      w[k] = 1 - smooth(-B.band, B.band, d)
+      const r = weigh(rest[k * 3], rest[k * 3 + 1], rest[k * 3 + 2])
+      w[k] = r.w; sa[k] = r.sa; sb[k] = r.sb
     }
     const mesh = new THREE.Mesh(g)
-    const D: Deform = { mesh, rest, restN, w }
+    const D: Deform = { mesh, rest, restN, w, sa, sb }
     if (kind === 'muscle' && meta) {
       const axis = principalAxis(rest)
       // coordonnées de texture : angle autour de l'axe (fibres) et position le long
@@ -180,34 +201,34 @@ function build(an: Anatomy, J: JointDef, pv: PathoVisual | null): Built {
       const mat = mats.muscle.clone(); addFade(mat, fade, 'm-' + name); disposables.push(mat)
       mesh.material = mat
       // poids aux deux extrémités (pour suivre l'axe déformé)
-      const wAt = (tt: number) => {
-        const p = axis.c.clone().addScaledVector(axis.dir, axis.tmin + len * tt)
-        if (!B.inRegion(p.x, p.y, p.z)) return 0
-        return 1 - smooth(-B.band, B.band, p.clone().sub(bc).dot(bd))
-      }
+      const endAt = (tt: number) => { const p = axis.c.clone().addScaledVector(axis.dir, axis.tmin + len * tt); return { p, ...weigh(p.x, p.y, p.z) } }
       D.prof = prof; D.radial = radial
-      D.muscle = { ...meta, name, axis, mat, act: 0, wA: wAt(0.12), wB: wAt(0.88) }
+      D.muscle = { ...meta, name, axis, mat, act: 0, ends: [endAt(0.12), endAt(0.88)] }
     }
     deforms.push(D)
     return D
   }
 
   const muscleDeforms: Deform[] = []
-  for (const m of J.muscles) { const d = makeDeform(m.name, 'muscle', m); if (d) muscleDeforms.push(d) }
+  const both = (n: string) => (J.bilateral && /\bright\b/.test(n) ? [false, true] : [false])
+  for (const m of J.muscles) for (const mi of both(m.name)) { const d = makeDeform(m.name, 'muscle', m, mi); if (d) muscleDeforms.push(d) }
   const extra: Deform[] = []
-  for (const n of J.extraMuscles ?? []) { const d = makeDeform(n, 'muscle', { group: 'other', label: n, simple: n }); if (d) extra.push(d) }
+  for (const n of J.extraMuscles ?? []) for (const mi of both(n)) { const d = makeDeform(n, 'muscle', { group: 'other', label: n, simple: n }, mi); if (d) extra.push(d) }
   const tendons: Deform[] = []
-  for (const n of J.tendons ?? []) { const d = makeDeform(n, 'tendon'); if (d) { d.mesh.material = mats.tendon; tendons.push(d) } }
+  for (const n of J.tendons ?? []) for (const mi of both(n)) { const d = makeDeform(n, 'tendon', undefined, mi); if (d) { d.mesh.material = pv?.damaged?.includes(n) ? Object.assign(mats.tendon.clone(), { color: new THREE.Color('#E58C7C'), emissive: new THREE.Color('#9A1E10'), emissiveIntensity: 0.6 }) : mats.tendon; tendons.push(d) } }
+  for (const n of J.discs ?? []) { const d = makeDeform(n, 'tendon'); if (d) { d.mesh.material = mats.cartilage; d.mesh.userData.disc = n; tendons.push(d) } }
   const skin = makeDeform('skin', 'skin')
   if (skin) skin.mesh.material = mats.skin
 
   // --- os rigides (cartilage peint, prothèse éventuelle)
   const boneGeos: { name: string; seg: string; g: THREE.BufferGeometry; implant: THREE.BufferGeometry | null }[] = []
-  for (const b of J.bones) {
+  for (const b of J.bones) for (const mi of both(b.name)) {
     const g0 = an.geometry(b.name)
     if (!g0) continue
     const g = g0.clone(); disposables.push(g)
-    const rule = J.cartilage.find((c) => c.bone === b.name)
+    if (mi) mirrorGeo(g)
+    const rule0 = J.cartilage.find((c) => c.bone === b.name)
+    const rule = rule0 && mi ? { ...rule0, test: (x: number, y: number, z: number) => rule0.test(-x, y, z) } : rule0
     const implant = !!pv?.implant?.includes(b.name)
     paintBone(g, rule?.test, false)
     let ig: THREE.BufferGeometry | null = null
@@ -236,16 +257,26 @@ function build(an: Anatomy, J: JointDef, pv: PathoVisual | null): Built {
     for (let k = 0; k < p.count; k++) if (p.getY(k) > 0.95) p.setY(k, p.getY(k) + Math.sin(k * 7.3) * 0.12)
     stub.computeVertexNormals(); disposables.push(stub)
   }
-  for (const L of J.ligaments) {
+  const ligDefs = J.ligaments.flatMap((L) => L.mirror ? [L, { ...L, id: L.id + '-g', a: { ...L.a, p: [-L.a.p[0], L.a.p[1], L.a.p[2]] as V3 }, b: { ...L.b, p: [-L.b.p[0], L.b.p[1], L.b.p[2]] as V3 } }] : [L])
+  for (const L of ligDefs) {
     const mat = (L.kind === 'tendon' ? mats.tendon : mats.ligament).clone(); addFade(mat, fade, 'l-' + L.id); disposables.push(mat)
     ligs.push({ def: L, mesh: new THREE.Mesh(unit, mat), stubs: [new THREE.Mesh(stub, mat), new THREE.Mesh(stub, mat)], rest: 1, mat })
   }
   // --- pièces procédurales (ménisques, cartilages)
-  const customGeos = J.customs.map((c) => {
+  const customGeos = J.customs.filter((c) => !c.only || (!!pathologyId && c.only.includes(pathologyId))).flatMap((c) => c.mirror ? [c, { ...c, mirror: false, id: c.id + '-g', build: () => mirrorGeo(c.build()) }] : [c]).map((c) => {
     const g = c.build(); disposables.push(g)
+    const dmg = !!pv?.damaged?.includes(c.id)
+    if (dmg && (c.kind === 'bursa' || c.id === 'capsule')) {
+      g.computeBoundingBox(); const ctr = g.boundingBox!.getCenter(new THREE.Vector3())
+      const k = c.kind === 'bursa' ? [1.35, 2.6, 1.35] : [1.12, 1.12, 1.12]
+      g.translate(-ctr.x, -ctr.y, -ctr.z); g.scale(k[0], k[1], k[2]); g.translate(ctr.x, ctr.y, ctr.z)
+    }
     const base = c.kind === 'meniscus' ? mats.ligament : mats.cartilage
     const m = base.clone() as THREE.MeshPhysicalMaterial
     if (c.kind === 'meniscus') { m.color = new THREE.Color('#E3EAF0'); m.opacity = 1; m.transparent = false }
+    if (c.kind === 'bursa') { m.color = new THREE.Color('#E9D6C8'); m.opacity = 0.85; m.transparent = true }
+    if (c.kind === 'implant' && !pv?.implant?.length) { m.color = new THREE.Color('#FAF6EC'); m.roughness = 0.7; m.clearcoat = 0 }
+    if (c.opacity !== undefined) { const o = dmg ? Math.max(0.6, c.opacity) : c.opacity; m.opacity = o; m.transparent = true; m.depthWrite = false; m.userData.baseOpacity = o }
     if (pv?.implant?.length && c.kind === 'cartilage') { m.color = new THREE.Color('#F4F6F8'); m.roughness = 0.35; m.clearcoat = 0.4 }
     if (pv?.wear?.includes(c.id)) { m.color = new THREE.Color('#B9A08F'); m.roughness = 0.9; m.clearcoat = 0; g.scale(1, 0.35, 1) }
     addFade(m, fade, 'c-' + c.id); disposables.push(m)
@@ -265,6 +296,7 @@ function build(an: Anatomy, J: JointDef, pv: PathoVisual | null): Built {
       }
     }
     if (kind === 'all' || kind === 'ligaments') {
+      for (const d of tendons) if (d.mesh.userData.disc) { const m = new THREE.Mesh(d.mesh.geometry, d.mesh.material); m.userData.layer = 'ligaments'; group.add(m) }
       for (const c of customGeos) { const m = new THREE.Mesh(c.g, c.m); m.userData.layer = 'ligaments'; addRigid(m, c.def.seg) }
       for (const L of ligs) {
         const add = (o: THREE.Mesh) => { const x = o.clone(); x.userData.layer = 'ligaments'; x.userData.lig = L.def.id; x.matrixAutoUpdate = false; group.add(x); return x }
@@ -274,7 +306,10 @@ function build(an: Anatomy, J: JointDef, pv: PathoVisual | null): Built {
       }
     }
     if (kind === 'all' || kind === 'muscles') {
-      for (const d of [...muscleDeforms, ...extra, ...tendons]) { const m = new THREE.Mesh(d.mesh.geometry, d.mesh.material); m.userData.layer = 'muscles'; m.userData.xray = 'soft'; group.add(m) }
+      for (const d of [...muscleDeforms, ...extra, ...tendons]) {
+        if (d.mesh.userData.disc) continue
+        const m = new THREE.Mesh(d.mesh.geometry, d.mesh.material); m.userData.layer = 'muscles'; m.userData.xray = 'soft'; m.userData.name = d.muscle?.name; group.add(m)
+      }
       if (kind === 'muscles') for (const L of ligs.filter((l) => l.def.kind === 'tendon')) {
         const x = L.mesh.clone(); x.userData.layer = 'muscles'; x.matrixAutoUpdate = false; group.add(x); L.mesh.userData.copies = [...(L.mesh.userData.copies ?? []), x]
       }
@@ -311,7 +346,7 @@ export interface LabelItem { id: string; text: string; tone: 'info' | 'work' | '
 function Scene(p: ViewerProps & { an: Anatomy; labelSink: React.MutableRefObject<LabelItem[]>; onFrame: () => void }) {
   const J = p.joint
   const pv = p.pathology ? J.pathologies[p.pathology] ?? null : null
-  const built = useMemo(() => build(p.an, J, pv), [p.an, J, pv])
+  const built = useMemo(() => build(p.an, J, pv, p.pathology), [p.an, J, pv, p.pathology])
   useEffect(() => () => built.dispose(), [built])
   const { gl, scene, camera, size } = useThree()
 
@@ -369,7 +404,7 @@ function Scene(p: ViewerProps & { an: Anatomy; labelSink: React.MutableRefObject
     set(M.tendon, x ? Math.min(0.18, L.muscles) : L.muscles, false)
     for (const d of built.deforms) if (d.muscle) set(d.muscle.mat, x ? Math.min(0.12, L.muscles) : L.muscles, false)
     for (const l of built.ligs) set(l.mat, (x ? 0.5 : 1) * L.ligaments * (l.def.kind === 'tendon' ? 1 : 0.92), l.def.kind !== 'tendon')
-    for (const m of built.customMats.values()) set(m, L.ligaments, true)
+    for (const m of built.customMats.values()) set(m, L.ligaments * (m.userData.baseOpacity ?? 1), true)
     set(M.skin, x ? Math.min(L.skin, 0.08) : L.skin, true)
     built.copies.forEach((c) => c.group.traverse((o) => {
       const layer = o.userData.layer as keyof typeof L | undefined
@@ -395,7 +430,7 @@ function Scene(p: ViewerProps & { an: Anatomy; labelSink: React.MutableRefObject
     const tan = Math.tan(THREE.MathUtils.degToRad(fov / 2))
     let [fw, fh] = J.camera.frame ?? [0.3, 0.36]
     if (p.mode === 'exploded') fw = fw * 2 + 0.42
-    const k = Math.max(fh / (2 * tan), fw / (2 * tan * aspect)) * 1.08
+    const k = Math.max(fh / (2 * tan), fw / (2 * tan * aspect)) * 1.2
     if (p.mode === 'exploded') dir.set(0, 0.12, 1).normalize()
     cam.position.copy(t.clone().addScaledVector(dir, k))
     cam.fov = fov; cam.near = 0.01; cam.far = 20; cam.updateProjectionMatrix()
@@ -405,7 +440,8 @@ function Scene(p: ViewerProps & { an: Anatomy; labelSink: React.MutableRefObject
   const ctl = useRef<import('three-stdlib').OrbitControls>(null)
 
   const pvRom = pv?.rom
-  const dof = J.dofs[0]
+  const motion = p.motion ?? pv?.motion ?? J.dofs[0].id
+  const dof = J.dofs.find((d) => d.id === motion) ?? J.dofs[0]
   const lo = pvRom ? pvRom[0] : dof.min, hi = pvRom ? pvRom[1] : dof.max
 
   useFrame((_, dt) => {
@@ -432,16 +468,20 @@ function Scene(p: ViewerProps & { an: Anatomy; labelSink: React.MutableRefObject
     const shift = pv?.shift
     for (const sg of J.segments) {
       const parent = sg.parent ? mats.get(sg.parent) ?? new THREE.Matrix4() : new THREE.Matrix4()
-      const ang = THREE.MathUtils.degToRad(s.angle * (sg.ratio ?? 1))
-      const pv3 = v3(sg.pivot)
+      const alt = sg.dof === motion ? null : sg.alt?.find((x) => x.dof === motion)
+      const ang = sg.dof === motion ? THREE.MathUtils.degToRad(s.angle * (sg.ratio ?? 1)) : alt ? THREE.MathUtils.degToRad(s.angle * (alt.ratio ?? 1)) : 0
+      const pv3 = v3(alt?.pivot ?? sg.pivot)
       const m = new THREE.Matrix4().makeTranslation(pv3.x, pv3.y, pv3.z)
-        .multiply(new THREE.Matrix4().makeRotationAxis(v3(sg.axis).normalize(), ang))
+        .multiply(new THREE.Matrix4().makeRotationAxis(v3(alt ? alt.axis : sg.axis).normalize(), ang))
         .multiply(new THREE.Matrix4().makeTranslation(-pv3.x, -pv3.y, -pv3.z))
       if (shift && shift.seg === sg.id) m.premultiply(new THREE.Matrix4().makeTranslation(...shift.by))
+      if (sg.slide && sg.dof === motion) { const sl = v3(sg.slide).multiplyScalar(s.angle); m.premultiply(new THREE.Matrix4().makeTranslation(sl.x, sl.y, sl.z)) }
       mats.set(sg.id, parent.clone().multiply(m))
     }
     const I = new THREE.Matrix4()
     const segOf = (id: string) => mats.get(id) ?? I
+    const segList = [I, ...J.segments.map((x) => segOf(x.id))]
+    const rotList = segList.map((m) => new THREE.Matrix3().setFromMatrix4(m))
     for (const r of built.rigids) { r.obj.matrix.copy(segOf(r.seg)); r.obj.matrixWorldNeedsUpdate = true }
 
     // activation musculaire
@@ -451,32 +491,41 @@ function Scene(p: ViewerProps & { an: Anatomy; labelSink: React.MutableRefObject
       const target = d.muscle.group === grp ? (Math.abs(s.vel) > 8 ? 1 : holdLevel) : 0
       d.muscle.act += (target - d.muscle.act) * Math.min(1, dt * 5)
       const a = d.muscle.act
-      d.muscle.mat.emissive.setRGB(0.55 * a, 0.12 * a, 0.02 * a)
-      d.muscle.mat.color.setRGB(1, 1 - 0.1 * a, 1 - 0.2 * a)
+      if (pv?.damaged?.includes(d.muscle.name)) {
+        const pl = 0.5 + 0.5 * Math.sin(performance.now() / 200)
+        d.muscle.mat.emissive.setRGB(0.5 + 0.25 * pl, 0.06, 0.03); d.muscle.mat.color.setRGB(1, 0.75, 0.7)
+      } else {
+        d.muscle.mat.emissive.setRGB(0.55 * a, 0.12 * a, 0.02 * a)
+        d.muscle.mat.color.setRGB(1, 1 - 0.1 * a, 1 - 0.2 * a)
+      }
     }
 
-    // déformation (mélange entre segment fixe et mobile + gonflement)
-    const Md = segOf(J.blend.seg)
-    const Rd = new THREE.Matrix3().setFromMatrix4(Md)
-    const e = Md.elements
+    // déformation (mélange entre deux segments + gonflement)
     for (const d of built.deforms) {
       const pos = d.mesh.geometry.getAttribute('position') as THREE.BufferAttribute
       const nor = d.mesh.geometry.getAttribute('normal') as THREE.BufferAttribute
       const P = pos.array as Float32Array, N = nor.array as Float32Array
-      const r = d.rest, rn = d.restN, w = d.w
+      const r = d.rest, rn = d.restN, w = d.w, SA = d.sa, SB = d.sb
       const bul = d.muscle ? d.muscle.act * 0.0035 : 0
-      const re = Rd.elements
       for (let k = 0, n = w.length; k < n; k++) {
         const i = k * 3, x = r[i], y = r[i + 1], z = r[i + 2], wk = w[k]
-        let ox = x, oy = y, oz = z
-        if (wk > 0) {
-          const dx = e[0] * x + e[4] * y + e[8] * z + e[12], dy = e[1] * x + e[5] * y + e[9] * z + e[13], dz = e[2] * x + e[6] * y + e[10] * z + e[14]
-          ox = x + (dx - x) * wk; oy = y + (dy - y) * wk; oz = z + (dz - z) * wk
-          const nx = rn[i], ny = rn[i + 1], nz = rn[i + 2]
+        const nx = rn[i], ny = rn[i + 1], nz = rn[i + 2]
+        const a = SA[k], b = SB[k]
+        let ax = x, ay = y, az = z, anx = nx, any = ny, anz = nz
+        if (a) {
+          const e = segList[a].elements, re = rotList[a].elements
+          ax = e[0] * x + e[4] * y + e[8] * z + e[12]; ay = e[1] * x + e[5] * y + e[9] * z + e[13]; az = e[2] * x + e[6] * y + e[10] * z + e[14]
+          anx = re[0] * nx + re[3] * ny + re[6] * nz; any = re[1] * nx + re[4] * ny + re[7] * nz; anz = re[2] * nx + re[5] * ny + re[8] * nz
+        }
+        let ox = ax, oy = ay, oz = az
+        if (wk > 0 && b) {
+          const e = segList[b].elements, re = rotList[b].elements
+          const bx = e[0] * x + e[4] * y + e[8] * z + e[12], by = e[1] * x + e[5] * y + e[9] * z + e[13], bz = e[2] * x + e[6] * y + e[10] * z + e[14]
+          ox = ax + (bx - ax) * wk; oy = ay + (by - ay) * wk; oz = az + (bz - az) * wk
           const mx = re[0] * nx + re[3] * ny + re[6] * nz, my = re[1] * nx + re[4] * ny + re[7] * nz, mz = re[2] * nx + re[5] * ny + re[8] * nz
-          N[i] = nx + (mx - nx) * wk; N[i + 1] = ny + (my - ny) * wk; N[i + 2] = nz + (mz - nz) * wk
-        } else { N[i] = rn[i]; N[i + 1] = rn[i + 1]; N[i + 2] = rn[i + 2] }
-        if (bul && d.prof && d.radial) { const b = bul * d.prof[k]; ox += d.radial[i] * b; oy += d.radial[i + 1] * b; oz += d.radial[i + 2] * b }
+          N[i] = anx + (mx - anx) * wk; N[i + 1] = any + (my - any) * wk; N[i + 2] = anz + (mz - anz) * wk
+        } else { N[i] = anx; N[i + 1] = any; N[i + 2] = anz }
+        if (bul && d.prof && d.radial) { const bb = bul * d.prof[k]; ox += d.radial[i] * bb; oy += d.radial[i + 1] * bb; oz += d.radial[i + 2] * bb }
         P[i] = ox; P[i + 1] = oy; P[i + 2] = oz
       }
       pos.needsUpdate = true; nor.needsUpdate = true
@@ -530,8 +579,8 @@ function Scene(p: ViewerProps & { an: Anatomy; labelSink: React.MutableRefObject
       const ax = mu.axis
       const len = ax.tmax - ax.tmin
       const pA = ax.c.clone().addScaledVector(ax.dir, ax.tmin + len * 0.12), pB = ax.c.clone().addScaledVector(ax.dir, ax.tmin + len * 0.88)
-      const blendP = (p0: THREE.Vector3, wv: number) => p0.clone().lerp(p0.clone().applyMatrix4(Md), wv)
-      const A = blendP(pA, mu.wA), Bp = blendP(pB, mu.wB)
+      const blendP = (p0: THREE.Vector3, e: { sa: number; sb: number; w: number }) => p0.clone().applyMatrix4(segList[e.sa]).lerp(p0.clone().applyMatrix4(segList[e.sb]), e.w)
+      const A = blendP(pA, mu.ends[0]), Bp = blendP(pB, mu.ends[1])
       const C = A.clone().lerp(Bp, 0.5)
       m.glow.visible = show
       m.glow.position.copy(C); m.glow.scale.setScalar(0.035 + 0.01 * Math.sin(performance.now() / 160)); (m.glow.material as THREE.SpriteMaterial).opacity = a
@@ -585,12 +634,17 @@ function Scene(p: ViewerProps & { an: Anatomy; labelSink: React.MutableRefObject
     ind.limit.visible = showArc && !!pvRom
     if (showArc && Math.abs(ind.lastArc - s.angle) > 0.4) {
       ind.lastArc = s.angle
-      const sg = J.segments.find((x) => x.id === J.arc.seg)!
-      const pv3 = v3(sg.pivot), ax = v3(sg.axis).normalize()
-      const r0 = new THREE.Vector3(0, -J.arc.radius, 0)
-      const pt = (deg: number) => r0.clone().applyAxisAngle(ax, THREE.MathUtils.degToRad(deg)).add(pv3).add(new THREE.Vector3(-0.065, 0, 0))
+      const sg0 = J.segments.find((x) => x.dof === motion && !x.ratio) ?? J.segments.find((x) => x.dof === motion)
+      const alt0 = sg0 ? null : J.segments.map((x) => x.alt?.find((a) => a.dof === motion)).find(Boolean)
+      const sg1 = sg0 ?? J.segments.find((x) => x.alt?.some((a) => a.dof === motion))!
+      const pv3 = v3(alt0?.pivot ?? sg1.pivot).add(v3(J.arc.offset ?? [0, 0, 0])), ax = v3(alt0?.axis ?? sg1.axis).normalize()
+      // rayon de départ : perpendiculaire à l'axe, orienté vers le bas ou l'avant
+      const ref = Math.abs(ax.y) > 0.8 ? new THREE.Vector3(0, 0, 1) : new THREE.Vector3(0, -1, 0)
+      const r0 = ref.addScaledVector(ax, -ref.dot(ax)).normalize().multiplyScalar(J.arc.radius)
+      const pt = (deg: number) => r0.clone().applyAxisAngle(ax, THREE.MathUtils.degToRad(deg)).add(pv3)
       const curve = (d0: number, d1: number) => new THREE.CatmullRomCurve3(Array.from({ length: 24 }, (_, i) => pt(d0 + ((d1 - d0) * i) / 23)))
-      ind.arc.geometry.dispose(); ind.arc.geometry = new THREE.TubeGeometry(curve(dof.min, Math.max(dof.min + 1, s.angle)), 40, 0.0018, 8)
+      const a0 = Math.max(dof.min, Math.min(dof.rest, s.angle)), a1 = Math.max(dof.rest, s.angle)
+      ind.arc.geometry.dispose(); ind.arc.geometry = new THREE.TubeGeometry(curve(a0, Math.max(a0 + 1, a1)), 40, 0.0018, 8)
       if (ind.arcBg.geometry.attributes.position === undefined) ind.arcBg.geometry = new THREE.TubeGeometry(curve(dof.min, dof.max), 60, 0.0012, 6)
       const end = pt(s.angle), tan = pt(s.angle + 1).sub(end).normalize()
       ind.arcHead.position.copy(end); ind.arcHead.quaternion.setFromUnitVectors(Y, tan)

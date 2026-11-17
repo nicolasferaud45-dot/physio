@@ -89,7 +89,7 @@ export const KNEE: JointDef = {
   ],
   actions: { increasing: 'flexor', decreasing: 'extensor', hold: 'extensor' },
   camera: { pos: [-0.62, 0.52, 0.42], target: [-0.078, 0.415, 0.07], fov: 30, frame: [0.3, 0.36] },
-  arc: { seg: 'leg', radius: 0.12, dof: 'flex' },
+  arc: { radius: 0.12, offset: [-0.065, 0, 0] },
   clip: { minY: 0.12, maxY: 0.74 },
   pathologies: {
     gonarthrose: {

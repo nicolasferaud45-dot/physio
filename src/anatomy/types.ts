@@ -12,10 +12,13 @@ export interface SegmentDef {
   ratio?: number
   /** translation (m) par degré, le long de `slide` (glissement) */
   slide?: V3
+  /** autres mouvements portés par ce segment */
+  alt?: { dof: string; axis: V3; ratio?: number; pivot?: V3 }[]
 }
 
 export interface LigamentDef {
   id: string
+  mirror?: boolean
   label: string
   simple: string
   a: { seg: string; p: V3 }
@@ -25,12 +28,28 @@ export interface LigamentDef {
   kind?: 'ligament' | 'tendon'
 }
 
+export interface BlendRule {
+  /** segment côté « avant » la bande (fixe si absent) */
+  from?: string
+  /** segment côté « après » la bande */
+  seg: string
+  center: V3
+  /** direction qui pointe vers le côté « from » */
+  dir: V3
+  band: number
+  inRegion: (x: number, y: number, z: number) => boolean
+}
+
 export interface CustomDef {
   id: string
   label: string
   simple: string
   seg: string
   kind: 'cartilage' | 'meniscus' | 'bursa' | 'implant'
+  mirror?: boolean
+  /** visible seulement pour ces pathologies */
+  only?: string[]
+  opacity?: number
   build: () => import('three').BufferGeometry
 }
 
@@ -41,6 +60,8 @@ export interface UnitDef { id: string; label: string; simple: string }
 export interface FrictionDef { id: string; label: string; at: { seg: string; p: V3 }; window: [number, number]; arrow: V3 }
 
 export interface PathoVisual {
+  /** mouvement montré (degré de liberté) ; le premier par défaut */
+  motion?: string
   /** amplitude possible chez le patient */
   rom?: [number, number]
   /** structures lésées (en rouge) : ids de ligaments / customs / muscles */
@@ -79,9 +100,13 @@ export interface JointDef {
   units: UnitDef[]
   extraMuscles?: string[]
   tendons?: string[]
+  /** disques intervertébraux (déformables, aspect cartilage) */
+  discs?: string[]
   segments: SegmentDef[]
-  /** répartition des tissus déformables (muscles, peau) entre segment fixe et mobile */
-  blend: { center: V3; dir: V3; band: number; seg: string; inRegion: (x: number, y: number, z: number) => boolean }
+  /** répartition des tissus déformables (muscles, peau) entre deux segments ; la première règle dont la région contient le sommet s'applique */
+  blend: BlendRule | BlendRule[]
+  /** ajoute le côté gauche en miroir (rachis) */
+  bilateral?: boolean
   /** zones de cartilage peintes sur les os */
   cartilage: { bone: string; test: (x: number, y: number, z: number) => boolean }[]
   ligaments: LigamentDef[]
@@ -90,7 +115,7 @@ export interface JointDef {
   actions: { increasing: MuscleGroup; decreasing: MuscleGroup; hold: MuscleGroup }
   /** frame : largeur et hauteur (m) à garder visibles */
   camera: { pos: V3; target: V3; fov?: number; frame?: [number, number] }
-  arc: { seg: string; radius: number; dof: string }
+  arc: { radius: number; offset?: V3 }
   pathologies: Record<string, PathoVisual>
   /** zone à rogner en hauteur pour ne garder que la région (m) */
   clip?: { minY: number; maxY: number }
