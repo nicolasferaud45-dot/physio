@@ -31,7 +31,6 @@ function texts(p: Pathology, simple: boolean) {
 
 export default function Presentation({ s, update, onExit, readOnly }: Props) {
   const patho = pathologyById(s.pathologyId) ?? PATHOLOGIES[0]
-  const siblings = PATHOLOGIES.filter((p) => p.region === patho.region)
   const pres = s.presentation
   const view: PresentView = pres.view ?? 'compare'
   const panelOpen = pres.panel ?? true
@@ -161,13 +160,7 @@ export default function Presentation({ s, update, onExit, readOnly }: Props) {
     <div className="pv">
       <header className="pv-top">
         {onExit && (readOnly ? <button className="btn round" onClick={onExit}><Icon name="back" />Retour</button> : <HoldButton onDone={onExit} label="Vue praticien" />)}
-        {siblings.length > 1 && (
-          <div className="tabs" role="tablist" aria-label="Pathologie à expliquer">
-            {siblings.map((x) => (
-              <button key={x.id} role="tab" aria-selected={x.id === patho.id} onClick={() => update({ pathologyId: x.id })}>{x.label}</button>
-            ))}
-          </div>
-        )}
+        <span className="pv-title">{patho.label}{s.side ? ` · ${s.side === 'D' ? 'droite' : 'gauche'}` : ''}</span>
         <div className="viewswitch" role="radiogroup" aria-label="Que montrer ?">
           <button role="radio" aria-checked={view === 'compare'} onClick={() => setView('compare')}><span className="dots"><i className="ok" /><i className="bad" /></span>Comparer</button>
           <button role="radio" aria-checked={view === 'normal'} onClick={() => setView('normal')}><i className="ok" />Normal</button>

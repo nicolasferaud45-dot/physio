@@ -9,6 +9,8 @@ import PatientsHome from './screens/PatientsHome'
 import PatientHome from './screens/PatientHome'
 import ExerciseViewer from './screens/ExerciseViewer'
 import { MOTIONS } from './data/motions'
+import AnatomyLab from './screens/AnatomyLab'
+import { JOINTS } from './anatomy/registry'
 import { pathologyById } from './data/catalog'
 import { decodePassport, usePatients, type Screen } from './state/session'
 
@@ -37,6 +39,10 @@ export default function App() {
   if (hash.startsWith('#p=')) {
     const data = decodePassport(hash.slice(3))
     if (data) return <PatientHome data={data} code={hash.slice(3)} />
+  }
+  if (hash.startsWith('#anat')) {
+    const id = hash.slice(6) || 'genou'
+    if (JOINTS[id]) return <AnatomyLab jointId={id} onClose={() => { location.hash = '' }} />
   }
   if (hash.startsWith('#ex-') && MOTIONS[hash.slice(4)]) {
     return <ExerciseViewer ids={Object.keys(MOTIONS)} start={hash.slice(4)} onClose={() => { location.hash = '' }} />

@@ -168,7 +168,8 @@ export default function Home({ s, update, go }: Props) {
         <section aria-label="Séance préparée" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 18, alignItems: 'stretch' }}>
           <div className="card stack">
             <span className="eyebrow">1 · Expliquer</span>
-            <h2>{patho ? patho.label : regionLabel(s.region ?? 'epaule')}{s.side ? ` · ${s.side === 'D' ? 'droite' : 'gauche'}` : ''}</h2>
+            <h2>{patho ? patho.label : regionLabel(s.region ?? 'epaule')}</h2>
+            <SideSwitch value={s.side} onChange={(side) => update({ side })} />
             <p className="muted" style={{ margin: 0 }}>{patho?.visual ? 'Vue 3D prête, comparaison saine / pathologique.' : 'Explication en mots simples prête.'}</p>
             <button className="btn dark" onClick={() => go('presentation')}><Icon name="screen" />Montrer au patient</button>
           </div>
@@ -202,7 +203,8 @@ export default function Home({ s, update, go }: Props) {
       {!pick && s.pathologyId && (
         <div className="card row wrap" style={{ padding: '14px 18px' }}>
           <span className="eyebrow">Pathologie retenue</span>
-          <strong className="grow">{pathologyById(s.pathologyId)?.label}{s.side ? ` · ${s.side === 'D' ? 'droite' : 'gauche'}` : ''}</strong>
+          <strong className="grow">{pathologyById(s.pathologyId)?.label}</strong>
+          <SideSwitch value={s.side} onChange={(side) => update({ side })} />
           <button className="btn" onClick={() => setPick(true)}>Changer</button>
         </div>
       )}
@@ -266,6 +268,16 @@ export function AiCard({ ai, compact }: { ai: AiAnalysis; compact?: boolean }) {
       {!compact && ai.exercises.length > 0 && <div className="stack" style={{ gap: 6 }}><span className="eyebrow">Exercices proposés</span>{ai.exercises.map((x) => <span key={x.id} className="small"><strong>{exerciseById(x.id)?.name}</strong> — {x.why}</span>)}</div>}
       {ai.patientMessage && <div className="stack" style={{ gap: 2 }}><span className="eyebrow">Pour le patient</span><span className="small" style={{ fontStyle: 'italic' }}>« {ai.patientMessage} »</span></div>}
       <Sources ids={ai.sources} />
+    </div>
+  )
+}
+
+/** Côté atteint : toutes les vues 3D s'affichent en miroir pour le côté gauche. */
+export function SideSwitch({ value, onChange }: { value: 'D' | 'G' | null; onChange: (v: 'D' | 'G') => void }) {
+  return (
+    <div className="seg side-switch" role="radiogroup" aria-label="Côté atteint">
+      <button role="radio" aria-checked={value === 'D'} aria-pressed={value === 'D'} onClick={() => onChange('D')}>Droit</button>
+      <button role="radio" aria-checked={value === 'G'} aria-pressed={value === 'G'} onClick={() => onChange('G')}>Gauche</button>
     </div>
   )
 }
