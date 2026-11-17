@@ -160,7 +160,7 @@ export function buildBodyRig(an: Anatomy): BodyRig {
   const owned = new Set<string>()
   const addGroup = (id: MuscleId, list: string[], mirrorOnly: boolean | null) => {
     const mat = mats.muscle.clone()
-    mat.transparent = true
+    mat.vertexColors = false; mat.transparent = true; mat.bumpScale = 0.6
     const proxy = new THREE.Mesh(new THREE.BufferGeometry(), mat)
     const members: Soft[] = []
     const c = new THREE.Vector3(); let cn = 0
@@ -187,7 +187,7 @@ export function buildBodyRig(an: Anatomy): BodyRig {
   }
   for (const [id, list] of Object.entries(BILAT) as [MuscleId, string[]][]) addGroup(id, list, null)
   // autres muscles (affichés seulement avec « tous les muscles »)
-  const idleMat = mats.muscle.clone(); idleMat.transparent = true; idleMat.opacity = 0.45
+  const idleMat = mats.muscle.clone(); idleMat.vertexColors = false; idleMat.color = new THREE.Color('#C98F80'); idleMat.transparent = true; idleMat.opacity = 0.5
   const idle: Soft[] = []
   for (const name of BODY_MUSCLES) for (const mi of /\bright\b/.test(name) ? [false, true] : [false]) {
     if (owned.has((mi ? 'L:' : 'R:') + name)) continue

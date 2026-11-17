@@ -97,7 +97,7 @@ export const KNEE: JointDef = {
       friction: [{ id: 'f-med', label: 'FROTTEMENT / COMPRESSION', at: { seg: 'leg', p: [-0.057, PLATEAU_Y + 0.004, 0.068] }, window: [0, 70], arrow: [0, 1, 0] }],
       caption: 'Cartilage du compartiment médial aminci : l\'os frotte en charge.',
       simpleCaption: 'Le cartilage s\'use à l\'intérieur du genou : ça frotte quand on s\'appuie.',
-      painZone: [0, 70], suffers: ['Cartilage de l\'intérieur du genou, aminci', 'Os sous le cartilage'], works: ['Quadriceps : il porte le poids du corps'], todo: 'Renforcer le quadriceps et bouger souvent : le cartilage se nourrit du mouvement.',
+      painZone: [10, 70], suffers: ['Cartilage de l\'intérieur du genou, aminci', 'Os sous le cartilage'], works: ['Quadriceps : il porte le poids du corps'], todo: 'Renforcer le quadriceps et bouger souvent : le cartilage se nourrit du mouvement.',
     },
     sfp: {
       friction: [{ id: 'f-pat', label: 'FROTTEMENT / COMPRESSION', at: { seg: 'patella', p: [-0.083, 0.418, 0.099] }, window: [30, 100], arrow: [0, 0, 1] }],

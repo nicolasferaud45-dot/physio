@@ -569,3 +569,16 @@ i.ok { background: #2E7D5B; } i.bad { background: #C2412D; }
 .weight { display: flex; flex-direction: column; gap: 4px; min-width: 200px; margin-left: auto; }
 .wbar { display: flex; height: 10px; border-radius: 5px; overflow: hidden; background: #E8EEF2; }
 .wbar span:first-child { background: #C2412D; } .wbar span:last-child { background: #F0A35A; }
+.pv-top { overflow-x: auto; scrollbar-width: none; }
+.pv-top::-webkit-scrollbar { display: none; }
+.pv-top > * { flex-shrink: 0; }
+@media (max-width: 760px) {
+  .pv-bar { flex-wrap: wrap; row-gap: 6px; }
+  .pv-bar .atrack { order: -1; flex-basis: calc(100% - 64px); }
+  .pv-chips { flex-direction: row; flex-wrap: wrap; }
+  .weight { margin-left: 0; }
+}
+@media (max-height: 520px) {
+  .pv-chips { flex-direction: row; }
+  .pv-chips button { min-height: 28px; }
+}

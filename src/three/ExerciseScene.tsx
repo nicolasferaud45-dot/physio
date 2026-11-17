@@ -1,6 +1,9 @@
 import { Canvas, useFrame, useThree } from '@react-three/fiber'
 import { OrbitControls } from '@react-three/drei'
-import { useEffect, useMemo, useRef } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js'
+import { loadAnatomy, type Anatomy } from '../anatomy/loader'
+import { buildBodyRig, type BodyRig } from '../anatomy/bodyRig'
 import * as THREE from 'three'
 import type { Motion } from '../data/motions'
 import { applyPose, buildRig, muscleLabel, NEUTRAL, type MuscleId, type Pose, type Rig } from './rig'
@@ -67,9 +70,10 @@ function poseAndGround(rig: Rig, m: Motion, pose: Pose, pin: { x: number; z: num
   return { x: pin ? pin.x : toePos.x, z: pin ? pin.z : toePos.z }
 }
 
-function ExerciseRig(p: Props & { labelRefs: LabelRefs }) {
+function ExerciseRig(p: Props & { labelRefs: LabelRefs; an: Anatomy | null }) {
   const m = p.motion
-  const rig = useMemo(buildRig, [])
+  const rig = useMemo(() => (p.an ? buildBodyRig(p.an) : buildRig()), [p.an])
+  const body = (rig as Partial<BodyRig>).isBody ? (rig as BodyRig & { idleProxy: THREE.Mesh }) : null
   const clock = useRef(0)
   const pin = useRef<{ x: number; z: number } | null>(null)
   const jointMarker = useRef<THREE.Mesh>(null)
@@ -132,7 +136,8 @@ function ExerciseRig(p: Props & { labelRefs: LabelRefs }) {
     // Silhouette / squelette
     const anyMuscle = p.layers.allMuscles || p.layers.work || p.layers.stretch || p.layers.stabilize
     rig.skin.forEach((s) => { s.visible = p.layers.skin })
-    rig.materials.skin.opacity = anyMuscle || p.layers.skeleton ? 0.3 : 0.95
+    rig.materials.skin.opacity = anyMuscle || p.layers.skeleton ? (body ? 0.14 : 0.3) : 0.95
+    if (body) body.idleProxy.visible = p.layers.allMuscles
     rig.materials.skin.depthWrite = !(anyMuscle || p.layers.skeleton)
     rig.skeleton.forEach((s) => { s.visible = p.layers.skeleton })
 
@@ -190,6 +195,7 @@ function ExerciseRig(p: Props & { labelRefs: LabelRefs }) {
       })
     }
 
+    body?.update()
     const v = (pose[m.focus.dof] as number) * (m.focus.sign ?? 1) + (m.focus.offset ?? 0)
     p.onTick?.(t, v, e)
   })
@@ -239,20 +245,34 @@ function CameraRig({ motion }: { motion: Motion }) {
   return <OrbitControls ref={controls} enablePan={false} minDistance={1.2} maxDistance={10} target={motion.target} />
 }
 
+function Env() {
+  const { gl, scene } = useThree()
+  useEffect(() => {
+    const pm = new THREE.PMREMGenerator(gl)
+    const env = pm.fromScene(new RoomEnvironment(), 0.04).texture
+    scene.environment = env
+    return () => { env.dispose(); pm.dispose() }
+  }, [gl, scene])
+  return null
+}
+
 export default function ExerciseScene(props: Props) {
   const labelRefs: LabelRefs = useRef({})
+  const [an, setAn] = useState<Anatomy | null>(null)
+  useEffect(() => { loadAnatomy().then(setAn).catch(() => setAn(null)) }, [])
   const m = props.motion
   const listed = props.layers.names
     ? [...m.muscles.work.filter(() => props.layers.work).map((id) => [id, 'work'] as const), ...m.muscles.stretch.filter(() => props.layers.stretch).map((id) => [id, 'stretch'] as const)]
     : []
   return (
     <div style={{ position: 'absolute', inset: 0 }}>
-    <Canvas camera={{ position: props.motion.camera, fov: 40 }} dpr={[1, 2]} gl={{ antialias: true, alpha: true }} style={{ position: 'absolute', inset: 0 }}>
+    <Canvas camera={{ position: props.motion.camera, fov: 40 }} dpr={[1, 2]} gl={{ antialias: true, alpha: true, toneMapping: THREE.ACESFilmicToneMapping }} style={{ position: 'absolute', inset: 0 }}>
       <hemisphereLight args={['#ffffff', '#c9d6df', 1.0]} />
       <directionalLight position={[2, 4, 3]} intensity={1.5} />
       <directionalLight position={[-3, 2, -2]} intensity={0.5} color="#dbe8f5" />
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0, 0]}><circleGeometry args={[2.2, 64]} /><meshStandardMaterial color="#E6EDF2" roughness={1} /></mesh>
-      <ExerciseRig {...props} labelRefs={labelRefs} />
+      <Env />
+      <ExerciseRig key={an ? 'body' : 'stick'} {...props} an={an} labelRefs={labelRefs} />
       <CameraRig motion={props.motion} />
     </Canvas>
     <div aria-hidden="true" style={{ position: 'absolute', inset: 0, pointerEvents: 'none', overflow: 'hidden' }}>

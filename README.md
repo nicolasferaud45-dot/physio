@@ -1,4 +1,4 @@
-# Physio · Assistant de consultation (prototype v0.4)
+# Physio · Assistant de consultation (prototype v0.5)
 
 Application tablette (iPad en priorité) qui aide le physiothérapeute pendant la séance :
 expliquer la pathologie en 3D, structurer le contexte, prescrire les exercices et
@@ -32,6 +32,21 @@ npx tsx scripts/illus.ts            # planche de toutes les illustrations d'exer
 - **Aujourd'hui** : séance guidée exercice par exercice (séries, minuterie de maintien et de repos, vue 3D, consignes), puis douleur ressentie 0–10.
 - **Comprendre** : « Normalement / Chez moi », amplitude, comparaison 3D.
 - **Mon suivi** : séances de la semaine, jours d'affilée, courbe de douleur (vert sous la limite fixée, rouge au-dessus).
+
+## Anatomie réelle (v0.5)
+
+Les vues 3D utilisent **BodyParts3D** (modèles issus de scanners, © The Database Center for Life Science, licence CC BY-SA 2.1 Japon) : 286 pièces (squelette, muscles, peau) allégées dans `src/anatomy/data.ts` par `tools/build_anatomy.py`.
+
+- **8 articulations** (`src/anatomy/joints/`) : épaule, coude, poignet, cervical, lombaire, hanche, genou, cheville. Os rigides articulés autour de centres mesurés sur les vrais os ; muscles et peau déformés entre segments ; ligaments, ménisques, cartilage, bourses, labrum ajustés aux os.
+- **Calques** à opacité réglable (peau, muscles, ligaments et cartilage, os, nerfs), vue complète, articulation, éclatée, rayons X.
+- **Indicateurs** : contraction (point orange + flèches de traction), frottement / compression (halo rouge pulsé), tension ligamentaire (blanc → orange → rouge), arc de mouvement.
+- **31 pathologies** visualisées (lésion en rouge, rupture, usure, prothèse, translation, gonflement).
+- **Pendant le mouvement** : zone douloureuse hachurée sur la barre, ralenti ou arrêt dans la zone, panneau « ce qui souffre / ce qui travaille / ce qu'on va faire ».
+- **Tout le corps** : chaîne de compensation par région (lésion, muscles surmenés, sous-utilisés, répartition du poids), tests et exercices à ajouter.
+- **Nerfs** : trajets tracés entre les vrais os (non scannés), tension en mouvement, compression, zone ressentie sur une silhouette.
+- **Droite / gauche** : tout s'affiche en miroir.
+- **Exercices** : les 58 animations pilotent le corps réel (squelette + muscles colorés par rôle).
+- Démonstrateur du cahier des charges : `#anat-genou` (ou `#anat-epaule`, `#anat-lombaire`…).
 
 ## Catalogue
 
@@ -86,8 +101,9 @@ src/
 
 - **Contenu clinique de démonstration** : à faire relire et valider avant tout usage réel.
 - **Suivi patient local** : le journal est stocké sur le téléphone du patient ; le praticien ne voit les retours que sur le même appareil (démo). En production : serveur sécurisé (liens signés, expirants, hébergement conforme nLPD / RGPD).
-- Mannequin et épaule 3D procéduraux : à remplacer par des modèles glTF médicaux ; poses à valider.
-- Seule l'épaule a une comparaison 3D ; les autres régions ont l'explication texte.
+- Positions des ligaments, nerfs et centres articulaires : ajustées à l'œil sur les vrais os, à faire valider ; nerfs tracés (non scannés).
+- Compensations : chaînes par région (pas encore spécifiques à chaque pathologie), sans animation de marche.
+- Rendu lourd sur les tablettes anciennes (6 Mo, déformation des muscles au processeur).
 - Claude n'est disponible que dans l'artifact (compte de l'utilisateur) ; en production, appel côté serveur avec la même validation.
 
 ## Prochaines étapes proposées
