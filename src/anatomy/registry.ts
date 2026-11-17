@@ -4,6 +4,7 @@ import { SHOULDER } from './joints/shoulder'
 import { HIP, ANKLE } from './joints/lower'
 import { ELBOW, WRIST } from './joints/upper'
 import { LUMBAR, CERVICAL } from './joints/spine'
+import './joints/nerves'
 
 /** Articulations disponibles, par région du catalogue. */
 export const JOINTS: Record<string, JointDef> = { genou: KNEE, epaule: SHOULDER, hanche: HIP, cheville: ANKLE, coude: ELBOW, poignet: WRIST, lombaire: LUMBAR, cervical: CERVICAL }

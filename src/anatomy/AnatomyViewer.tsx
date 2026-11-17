@@ -7,9 +7,9 @@ import * as THREE from 'three'
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js'
 import { loadAnatomy, type Anatomy } from './loader'
 import { COLORS, glowTexture, makeMaterials, type MaterialSet } from './materials'
-import type { JointDef, LigamentDef, MuscleGroup, PathoVisual, V3 } from './types'
+import type { JointDef, LigamentDef, MuscleGroup, NerveDef, PathoVisual, V3 } from './types'
 
-export interface Layers { skin: number; muscles: number; ligaments: number; bones: number }
+export interface Layers { skin: number; muscles: number; ligaments: number; bones: number; nerves?: number }
 export type ViewMode = 'complete' | 'exploded' | 'xray'
 
 export interface ViewerProps {
@@ -34,6 +34,10 @@ export interface ViewerProps {
   angleRef?: React.MutableRefObject<number>
   /** degré de liberté animé */
   motion?: string
+  /** compensations : rôle de muscles précis ('R:nom' côté atteint, 'L:nom' côté opposé) */
+  highlight?: Record<string, 'bad' | 'over' | 'under'>
+  /** repères numérotés (zones) */
+  marks?: { id: string; p: V3; tone: 'bad' | 'over' | 'under'; text: string }[]
   onCanvas?: (c: HTMLCanvasElement) => void
 }
 
@@ -93,11 +97,13 @@ interface Deform {
   /** profil le long du muscle (0 aux extrémités, 1 au centre) et direction radiale pour le gonflement */
   prof?: Float32Array
   radial?: Float32Array
-  muscle?: { group: MuscleGroup; label: string; simple: string; name: string; unit?: string; axis: ReturnType<typeof principalAxis>; mat: THREE.MeshPhysicalMaterial; act: number; ends: { p: THREE.Vector3; sa: number; sb: number; w: number }[] }
+  muscle?: { mirror: boolean; group: MuscleGroup; label: string; simple: string; name: string; unit?: string; axis: ReturnType<typeof principalAxis>; mat: THREE.MeshPhysicalMaterial; act: number; ends: { p: THREE.Vector3; sa: number; sb: number; w: number }[] }
 }
 interface Rigid { obj: THREE.Object3D; seg: string }
 interface LigMesh { def: LigamentDef; mesh: THREE.Mesh; stubs: [THREE.Mesh, THREE.Mesh]; rest: number; mat: THREE.MeshPhysicalMaterial }
+interface NerveMesh { def: NerveDef; mesh: THREE.Mesh; mat: THREE.MeshPhysicalMaterial; rest: number; last: string }
 interface Built {
+  nerves: NerveMesh[]
   root: THREE.Group
   copies: { group: THREE.Group; kind: 'all' | 'muscles' | 'ligaments' | 'bones' }[]
   deforms: Deform[]
@@ -203,7 +209,7 @@ function build(an: Anatomy, J: JointDef, pv: PathoVisual | null, pathologyId: st
       // poids aux deux extrémités (pour suivre l'axe déformé)
       const endAt = (tt: number) => { const p = axis.c.clone().addScaledVector(axis.dir, axis.tmin + len * tt); return { p, ...weigh(p.x, p.y, p.z) } }
       D.prof = prof; D.radial = radial
-      D.muscle = { ...meta, name, axis, mat, act: 0, ends: [endAt(0.12), endAt(0.88)] }
+      D.muscle = { ...meta, mirror, name, axis, mat, act: 0, ends: [endAt(0.12), endAt(0.88)] }
     }
     deforms.push(D)
     return D
@@ -284,6 +290,16 @@ function build(an: Anatomy, J: JointDef, pv: PathoVisual | null, pathologyId: st
     return { def: c, g, m }
   })
 
+  // --- nerfs (tube recalculé à chaque image le long du trajet)
+  const nerves: NerveMesh[] = []
+  const nerveDefs = (J.nerves ?? []).flatMap((n) => n.mirror ? [n, { ...n, id: n.id + '-g', mirror: false, points: n.points.map((q) => ({ seg: q.seg, p: [-q.p[0], q.p[1], q.p[2]] as V3 })) }] : [n])
+  for (const n of nerveDefs) {
+    const mat = new THREE.MeshPhysicalMaterial({ color: '#E8B90F', roughness: 0.35, clearcoat: 0.6, emissive: new THREE.Color('#5a4300'), emissiveIntensity: 0.4, transparent: true })
+    addFade(mat, fade, 'n-' + n.id); disposables.push(mat)
+    const mesh = new THREE.Mesh(new THREE.BufferGeometry(), mat); mesh.userData.layer = 'nerves'; mesh.renderOrder = 5
+    nerves.push({ def: n, mesh, mat, rest: 0, last: '' })
+  }
+
   // --- copies : vue complète, ou vue éclatée (muscles | ligaments | os)
   const copies: Built['copies'] = []
   const mk = (kind: Built['copies'][number]['kind']) => {
@@ -314,6 +330,7 @@ function build(an: Anatomy, J: JointDef, pv: PathoVisual | null, pathologyId: st
         const x = L.mesh.clone(); x.userData.layer = 'muscles'; x.matrixAutoUpdate = false; group.add(x); L.mesh.userData.copies = [...(L.mesh.userData.copies ?? []), x]
       }
     }
+    if (kind === 'all') for (const n of nerves) group.add(n.mesh)
     if (kind === 'all' && skin) { const m = new THREE.Mesh(skin.mesh.geometry, skin.mesh.material); m.userData.layer = 'skin'; m.renderOrder = 10; group.add(m) }
     root.add(group)
     copies.push({ group, kind })
@@ -321,8 +338,8 @@ function build(an: Anatomy, J: JointDef, pv: PathoVisual | null, pathologyId: st
   mk('all'); mk('muscles'); mk('ligaments'); mk('bones')
 
   return {
-    root, copies, deforms, rigids, ligs, mats, xmats, customMats, fade,
-    dispose: () => { for (const d of disposables) d.dispose(); for (const m of [...Object.values(mats), ...Object.values(xmats)]) m.dispose() },
+    root, copies, deforms, rigids, ligs, mats, xmats, customMats, fade, nerves,
+    dispose: () => { for (const n of nerves) n.mesh.geometry.dispose(); for (const d of disposables) d.dispose(); for (const m of [...Object.values(mats), ...Object.values(xmats)]) m.dispose() },
   }
 }
 
@@ -406,10 +423,11 @@ function Scene(p: ViewerProps & { an: Anatomy; labelSink: React.MutableRefObject
     for (const l of built.ligs) set(l.mat, (x ? 0.5 : 1) * L.ligaments * (l.def.kind === 'tendon' ? 1 : 0.92), l.def.kind !== 'tendon')
     for (const m of built.customMats.values()) set(m, L.ligaments * (m.userData.baseOpacity ?? 1), true)
     set(M.skin, x ? Math.min(L.skin, 0.08) : L.skin, true)
+    for (const n of built.nerves) set(n.mat, L.nerves ?? 0, true)
     built.copies.forEach((c) => c.group.traverse((o) => {
       const layer = o.userData.layer as keyof typeof L | undefined
       if (!layer) return
-      const op = layer === 'bones' ? L.bones : layer === 'muscles' ? L.muscles : layer === 'ligaments' ? L.ligaments : L.skin
+      const op = layer === 'bones' ? L.bones : layer === 'muscles' ? L.muscles : layer === 'ligaments' ? L.ligaments : layer === 'nerves' ? (L.nerves ?? 0) : L.skin
       o.visible = (p.mode === 'exploded' && c.kind !== 'all') ? true : op > 0.01 || (x && layer === 'bones')
       if (o instanceof THREE.Mesh && o.userData.xray === 'bone') o.material = x ? built.xmats.bone : built.mats.bone
     }))
@@ -491,7 +509,17 @@ function Scene(p: ViewerProps & { an: Anatomy; labelSink: React.MutableRefObject
       const target = d.muscle.group === grp ? (Math.abs(s.vel) > 8 ? 1 : holdLevel) : 0
       d.muscle.act += (target - d.muscle.act) * Math.min(1, dt * 5)
       const a = d.muscle.act
-      if (pv?.damaged?.includes(d.muscle.name)) {
+      const hl = p.highlight ? p.highlight[(d.muscle.mirror ? 'L:' : 'R:') + d.muscle.name] : undefined
+      if (p.highlight) {
+        const pl = 0.5 + 0.5 * Math.sin(performance.now() / 220)
+        const m = d.muscle.mat
+        if (hl === 'bad') { m.color.setRGB(1, 0.72, 0.68); m.emissive.setRGB(0.55 + 0.2 * pl, 0.05, 0.02) }
+        else if (hl === 'over') { m.color.setRGB(1, 0.85, 0.6); m.emissive.setRGB(0.5 + 0.15 * pl, 0.22, 0.0) }
+        else if (hl === 'under') { m.color.setRGB(0.62, 0.72, 0.85); m.emissive.setRGB(0.02, 0.05, 0.12) }
+        else { m.color.setRGB(1, 1, 1); m.emissive.setRGB(0, 0, 0) }
+        const want = (hl ? 1 : 0.22) * p.layers.muscles
+        if (Math.abs(m.opacity - want) > 0.01) { m.opacity = want; const t = want < 0.999; if (m.transparent !== t) { m.transparent = t; m.needsUpdate = true } m.depthWrite = want > 0.6 }
+      } else if (pv?.damaged?.includes(d.muscle.name)) {
         const pl = 0.5 + 0.5 * Math.sin(performance.now() / 200)
         d.muscle.mat.emissive.setRGB(0.5 + 0.25 * pl, 0.06, 0.03); d.muscle.mat.color.setRGB(1, 0.75, 0.7)
       } else {
@@ -501,7 +529,10 @@ function Scene(p: ViewerProps & { an: Anatomy; labelSink: React.MutableRefObject
     }
 
     // déformation (mélange entre deux segments + gonflement)
+    const staticBody = !J.segments.length
     for (const d of built.deforms) {
+      if (staticBody && d.mesh.userData.done) continue
+      d.mesh.userData.done = true
       const pos = d.mesh.geometry.getAttribute('position') as THREE.BufferAttribute
       const nor = d.mesh.geometry.getAttribute('normal') as THREE.BufferAttribute
       const P = pos.array as Float32Array, N = nor.array as Float32Array
@@ -570,6 +601,31 @@ function Scene(p: ViewerProps & { an: Anatomy; labelSink: React.MutableRefObject
       labels.push({ id: 'lig-' + L.def.id, text: torn ? `${p.simple ? L.def.simple : L.def.label} · RUPTURE` : showT ? 'TENSION DU LIGAMENT' : p.simple ? L.def.simple : L.def.label, tone: torn || damaged ? 'bad' : showT ? 'tension' : 'info', world: mid, visible: p.layers.ligaments > 0.3 && (showT || torn || damaged || (!p.compact && p.layers.muscles < 0.5 && p.labels)) })
     }
 
+    // nerfs : trajet, tension (jaune → rouge), compression
+    const nOp = p.layers.nerves ?? 0
+    for (const n of built.nerves) {
+      if (nOp < 0.01) continue
+      const pts = n.def.points.map((q) => v3(q.p).applyMatrix4(segOf(q.seg)))
+      let len = 0
+      for (let i = 1; i < pts.length; i++) len += pts[i].distanceTo(pts[i - 1])
+      if (!n.rest) n.rest = len
+      n.rest = Math.min(n.rest, len)
+      const key = pts.map((q) => q.x.toFixed(4) + q.y.toFixed(4) + q.z.toFixed(4)).join()
+      if (key !== n.last) {
+        n.last = key
+        n.mesh.geometry.dispose()
+        n.mesh.geometry = new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), 48, n.def.radius ?? 0.0028, 10)
+      }
+      const comp = !!pv?.nerves?.includes(n.def.id.replace(/-g$/, '')) && !n.def.id.endsWith('-g')
+      const strain = len / n.rest - 1
+      const k = smooth(0.01, 0.07, strain)
+      const pl = 0.5 + 0.5 * Math.sin(performance.now() / 180)
+      n.mat.color.set('#E8B90F').lerp(new THREE.Color('#F08A24'), Math.min(1, k * 1.6)).lerp(COLORS.danger, comp ? 0.55 + 0.3 * pl : Math.max(0, k - 0.5) * 2)
+      n.mat.emissive.set(comp ? '#7a1408' : '#5a4300'); n.mat.emissiveIntensity = comp ? 0.5 + 0.4 * pl : 0.35 + k * 0.4
+      const mid = pts[Math.floor(pts.length / 2)]
+      if (!n.def.id.endsWith('-g') && nOp > 0.3) labels.push({ id: 'n-' + n.def.id, text: comp ? `${p.simple ? n.def.simple : n.def.label} · COMPRESSION` : k > 0.5 ? `${p.simple ? n.def.simple : n.def.label} · TENSION` : (p.simple ? n.def.simple : n.def.label), tone: comp ? 'bad' : k > 0.5 ? 'tension' : 'info', world: mid, visible: comp || k > 0.5 || (p.labels && !p.compact) })
+    }
+
     // contraction : halo et flèches convergentes le long des fibres
     const units = new Map<string, { c: THREE.Vector3; n: number; act: number }>()
     for (const m of ind.musc) {
@@ -628,8 +684,11 @@ function Scene(p: ViewerProps & { an: Anatomy; labelSink: React.MutableRefObject
       if (show) labels.push({ id: 'f-' + f.f.id, text: f.f.label, tone: 'bad', world: at, visible: true })
     }
 
+    // repères numérotés (compensations)
+    for (const mk of p.marks ?? []) labels.push({ id: 'mk-' + mk.id, text: mk.text, tone: mk.tone === 'bad' ? 'bad' : mk.tone === 'over' ? 'tension' : 'info', world: v3(mk.p), visible: true })
+
     // arc cinématique
-    const showArc = p.indicators && p.mode !== 'exploded'
+    const showArc = p.indicators && p.mode !== 'exploded' && J.segments.length > 0
     ind.arc.visible = ind.arcBg.visible = ind.arcHead.visible = showArc
     ind.limit.visible = showArc && !!pvRom
     if (showArc && Math.abs(ind.lastArc - s.angle) > 0.4) {

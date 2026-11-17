@@ -11,10 +11,18 @@ const AnatomyViewer = lazy(() => import('../anatomy/AnatomyViewer'))
 import { jointForRegion } from '../anatomy/registry'
 import type { Layers, ViewMode } from '../anatomy/AnatomyViewer'
 import { AngleTrack } from '../components/AngleTrack'
+import { NerveZone } from '../components/NerveZone'
+import { BODY } from '../anatomy/joints/body'
+import { chainFor } from '../data/compensations'
+import { exerciseById } from '../data/catalog'
+import { defaultPrescription } from '../engine/plan'
+import type { NerveArea } from '../anatomy/types'
 
+const JOINT_TAB: Record<string, string> = { genou: 'Le genou', epaule: 'L\'épaule', hanche: 'La hanche', cheville: 'La cheville', coude: 'Le coude', poignet: 'Le poignet', lombaire: 'Le dos', cervical: 'Le cou' }
 const LAYER_PRESETS: { id: string; label: string; mode: ViewMode; layers: Layers }[] = [
   { id: 'deep', label: 'Articulation', mode: 'complete', layers: { skin: 0, muscles: 0.08, ligaments: 1, bones: 1 } },
   { id: 'complete', label: 'Vue complète', mode: 'complete', layers: { skin: 0.15, muscles: 1, ligaments: 1, bones: 1 } },
+  { id: 'nerves', label: 'Nerfs', mode: 'complete', layers: { skin: 0, muscles: 0.12, ligaments: 0.6, bones: 1, nerves: 1 } },
   { id: 'xray', label: 'Rayons X', mode: 'xray', layers: { skin: 0.08, muscles: 0.12, ligaments: 0.6, bones: 1 } },
   { id: 'exploded', label: 'Vue éclatée', mode: 'exploded', layers: { skin: 0, muscles: 1, ligaments: 1, bones: 1 } },
 ]
@@ -60,9 +68,13 @@ export default function Presentation({ s, update, onExit, readOnly }: Props) {
   const J = jointForRegion(patho.region)
   const jv = J?.pathologies[patho.id] ?? null
   const dof = J?.dofs[0]
-  const [preset, setPreset] = useState(jv?.view === 'complete' ? 'complete' : 'deep')
-  const [jl, setJl] = useState<{ layers: Layers; mode: ViewMode }>(() => { const p = LAYER_PRESETS.find((x) => x.id === (jv?.view === 'complete' ? 'complete' : 'deep'))!; return { layers: p.layers, mode: p.mode } })
+  const initPreset = jv?.nerves?.length ? 'nerves' : jv?.view === 'complete' ? 'complete' : 'deep'
+  const [preset, setPreset] = useState(initPreset)
+  const [jl, setJl] = useState<{ layers: Layers; mode: ViewMode }>(() => { const p = LAYER_PRESETS.find((x) => x.id === initPreset)!; return { layers: p.layers, mode: p.mode } })
   const [labelsOn, setLabelsOn] = useState(true)
+  const [scope, setScope] = useState<'joint' | 'body'>('joint')
+  const [stepFocus, setStepFocus] = useState<number | null>(null)
+  const chain = J ? chainFor(patho.region, (jv?.damaged ?? []).filter((d) => d.startsWith('right ') || d.includes(' of right '))) : null
   const [slowZone, setSlowZone] = useState(true)
   const [stopZone, setStopZone] = useState(false)
   const [jAngle, setJAngle] = useState(0)
@@ -214,13 +226,64 @@ export default function Presentation({ s, update, onExit, readOnly }: Props) {
       <header className="pv-top">
         {onExit && (readOnly ? <button className="btn round" onClick={onExit}><Icon name="back" />Retour</button> : <HoldButton onDone={onExit} label="Vue praticien" />)}
         <span className="pv-title">{patho.label}{s.side ? ` · ${s.side === 'D' ? 'droite' : 'gauche'}` : ''}</span>
-        <div className="viewswitch" role="radiogroup" aria-label="Que montrer ?">
+        {J && jv && (
+          <div className="viewswitch scope" role="tablist" aria-label="Échelle">
+            <button role="tab" aria-selected={scope === 'joint' && preset !== 'nerves'} onClick={() => { setScope('joint'); if (preset === 'nerves') { const p = LAYER_PRESETS.find((x) => x.id === (jv.view === 'complete' ? 'complete' : 'deep'))!; setPreset(p.id); setJl({ layers: p.layers, mode: p.mode }) } }}>{JOINT_TAB[J.id] ?? J.label}</button>
+            {chain && <button role="tab" aria-selected={scope === 'body'} onClick={() => setScope('body')}>Tout le corps</button>}
+            {!!J.nerves?.length && <button role="tab" aria-selected={scope === 'joint' && preset === 'nerves'} onClick={() => { setScope('joint'); const p = LAYER_PRESETS.find((x) => x.id === 'nerves')!; setPreset('nerves'); setJl({ layers: p.layers, mode: p.mode }) }}>Les nerfs</button>}
+          </div>
+        )}
+        {scope === 'joint' && <div className="viewswitch" role="radiogroup" aria-label="Que montrer ?">
           <button role="radio" aria-checked={view === 'compare'} onClick={() => setView('compare')}><span className="dots"><i className="ok" /><i className="bad" /></span>Comparer</button>
           <button role="radio" aria-checked={view === 'normal'} onClick={() => setView('normal')}><i className="ok" />Normal</button>
           <button role="radio" aria-checked={view === 'patho'} onClick={() => setView('patho')}><i className="bad" />{readOnly ? 'Ma pathologie' : 'Pathologie'}</button>
-        </div>
+        </div>}
       </header>
 
+      {scope === 'body' && chain ? (
+      <div className="pv-main">
+        <section className="pv-stage" aria-label="Tout le corps">
+          <div className="pv-panes one">
+            <div className="pane patho">
+              <Suspense fallback={<div className="pane-loading muted">Chargement du corps entier…</div>}>
+                <AnatomyViewer joint={BODY} pathology={null} layers={{ skin: 0.1, muscles: 1, ligaments: 0, bones: 0.85 }} mode="complete" labels indicators={false}
+                  side={s.side ?? 'D'} simple={simple} playing={false} angle={0} tone="neutral" highlight={chain.muscles}
+                  marks={chain.steps.map((st, i) => ({ id: String(i), p: st.at, tone: st.tone, text: stepFocus === null || stepFocus === i ? st.mark : String(i + 1) }))} />
+              </Suspense>
+            </div>
+          </div>
+          <div className="pv-bar" role="toolbar" aria-label="Légende">
+            <span className="legend-chip bad"><i />Lésion d'origine</span>
+            <span className="legend-chip over"><i />Surmené (compensation)</span>
+            <span className="legend-chip under"><i />Sous-utilisé</span>
+            {chain.weight && <div className="weight"><span className="small" style={{ fontWeight: 600 }}>Poids sur la jambe {s.side === 'G' ? 'gauche' : 'droite'} : {chain.weight[0]} %</span>
+              <div className="wbar"><span style={{ width: `${chain.weight[0]}%` }} /><span style={{ width: `${chain.weight[1]}%` }} /></div></div>}
+          </div>
+        </section>
+        <aside className="pv-side" aria-label="Pourquoi j'ai mal ailleurs">
+          <h1 className="pv-title" style={{ fontSize: 22 }}>{readOnly ? 'Pourquoi j\'ai mal ailleurs ?' : 'Pourquoi a-t-on mal ailleurs ?'}</h1>
+          {chain.steps.map((st, i) => (
+            <button key={i} className={`chain-step ${st.tone}`} aria-pressed={stepFocus === i} onClick={() => setStepFocus(stepFocus === i ? null : i)}>
+              <b>{i + 1}</b><span className="stack" style={{ gap: 2 }}><strong>{st.title}</strong><span className="small">{st.body}</span></span>
+            </button>
+          ))}
+          <div className="moment"><div className="blk ok"><strong>Ce que ça change pour le programme</strong><span>{chain.program}</span></div></div>
+          {!readOnly && (
+            <div className="card stack ai-card" style={{ gap: 8, padding: 12 }}>
+              <span className="eyebrow">Vue praticien</span>
+              <span className="small"><strong>À évaluer :</strong> {chain.tests.join(' · ')}</span>
+              <div className="stack" style={{ gap: 4 }}>
+                {chain.exercises.filter((id) => exerciseById(id)).map((id) => {
+                  const inP = s.program.some((p) => p.exerciseId === id)
+                  return <button key={id} className="btn" style={{ minHeight: 40, justifyContent: 'space-between' }} disabled={inP} onClick={() => update((x) => ({ program: [...x.program, defaultPrescription(exerciseById(id)!)] }))}>
+                    <span className="small" style={{ fontWeight: 600 }}>{exerciseById(id)!.name}</span><span className="small">{inP ? 'Dans le programme' : '+ Ajouter'}</span></button>
+                })}
+              </div>
+            </div>
+          )}
+        </aside>
+      </div>
+      ) : (
       <div className="pv-main">
         <section className="pv-stage" aria-label="Visualisation">
           <div ref={panes} className={`pv-panes ${view === 'compare' ? 'two' : 'one'}`}>
@@ -249,9 +312,9 @@ export default function Presentation({ s, update, onExit, readOnly }: Props) {
                 <span className="eyebrow">Vue</span>
                 <div className="row wrap" style={{ gap: 6 }}>{LAYER_PRESETS.map((p) => <button key={p.id} className="chip" aria-pressed={preset === p.id} style={preset === p.id ? { background: 'var(--blue)', color: '#fff' } : undefined} onClick={() => { setPreset(p.id); setJl({ layers: p.layers, mode: p.mode }) }}>{p.label}</button>)}</div>
                 <span className="eyebrow">Opacité</span>
-                {([['skin', 'Peau'], ['muscles', 'Muscles et tendons'], ['ligaments', 'Ligaments et cartilage'], ['bones', 'Os']] as const).map(([k, l]) => (
-                  <label key={k} className="layer-slider"><span className="row"><span className="grow">{l}</span><b>{Math.round(jl.layers[k] * 100)} %</b></span>
-                    <input type="range" min={0} max={100} value={Math.round(jl.layers[k] * 100)} onChange={(e) => { setPreset(''); setJl({ ...jl, layers: { ...jl.layers, [k]: +e.target.value / 100 } }) }} /></label>
+                {([['skin', 'Peau'], ['muscles', 'Muscles et tendons'], ['ligaments', 'Ligaments et cartilage'], ['bones', 'Os'], ['nerves', 'Nerfs']] as const).filter(([k]) => k !== 'nerves' || !!J.nerves?.length).map(([k, l]) => (
+                  <label key={k} className="layer-slider"><span className="row"><span className="grow">{l}</span><b>{Math.round((jl.layers[k] ?? 0) * 100)} %</b></span>
+                    <input type="range" min={0} max={100} value={Math.round((jl.layers[k] ?? 0) * 100)} onChange={(e) => { setPreset(''); setJl({ ...jl, layers: { ...jl.layers, [k]: +e.target.value / 100 } }) }} /></label>
                 ))}
                 <CheckRow label="Étiquettes" checked={labelsOn} onChange={() => setLabelsOn(!labelsOn)} />
               </Popover>
@@ -322,6 +385,9 @@ export default function Presentation({ s, update, onExit, readOnly }: Props) {
               <div className="explain-block bad"><span className="explain-label"><i />Ce que l'on voit</span><p>{simple ? jv.simpleCaption : jv.caption}</p>
                 {pain && <span className="small muted">Lancez le mouvement : la zone rouge ({pain[0]}–{pain[1]}°) s'allume quand ça fait mal.</span>}</div>
             ))}
+            {J && jv?.nerves?.length && view !== 'normal' ? (
+              <NerveZone side={s.side ?? 'D'} areas={(J.nerves ?? []).filter((n) => jv.nerves!.includes(n.id) && n.area).map((n) => n.area as NerveArea)} />
+            ) : null}
             {J && jv?.rom && dof && (
               <div className="rom">
                 <span className="small" style={{ fontWeight: 600 }}>{dof.label}</span>
@@ -341,6 +407,7 @@ export default function Presentation({ s, update, onExit, readOnly }: Props) {
           </aside>
         )}
       </div>
+      )}
       {toast && <div className="toast" role="status">{toast}</div>}
     </div>
   )

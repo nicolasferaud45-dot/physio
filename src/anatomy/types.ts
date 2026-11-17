@@ -40,6 +40,19 @@ export interface BlendRule {
   inRegion: (x: number, y: number, z: number) => boolean
 }
 
+export type NerveArea = 'L4' | 'L5' | 'S1' | 'sciatique' | 'fibulaire' | 'tibial' | 'plantaire' | 'C5' | 'C6' | 'C7' | 'median' | 'ulnaire' | 'radial' | 'axillaire' | 'suprascapulaire' | 'cauda'
+export interface NerveDef {
+  id: string
+  label: string
+  simple: string
+  /** trajet : points rattachés aux segments */
+  points: { seg: string; p: V3 }[]
+  radius?: number
+  /** zone où le patient ressent les symptômes */
+  area?: NerveArea
+  mirror?: boolean
+}
+
 export interface CustomDef {
   id: string
   label: string
@@ -73,6 +86,8 @@ export interface PathoVisual {
   wear?: string[]
   /** décalage d'un segment (ex. tiroir antérieur) */
   shift?: { seg: string; by: V3 }
+  /** nerfs comprimés ou irrités */
+  nerves?: string[]
   /** remplace une zone par une prothèse */
   implant?: string[]
   /** étirement imposé à un ligament (entorse) */
@@ -111,6 +126,7 @@ export interface JointDef {
   cartilage: { bone: string; test: (x: number, y: number, z: number) => boolean }[]
   ligaments: LigamentDef[]
   customs: CustomDef[]
+  nerves?: NerveDef[]
   /** muscles actifs selon le sens du mouvement */
   actions: { increasing: MuscleGroup; decreasing: MuscleGroup; hold: MuscleGroup }
   /** frame : largeur et hauteur (m) à garder visibles */

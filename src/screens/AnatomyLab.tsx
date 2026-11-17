@@ -10,6 +10,7 @@ const PRESETS: { id: string; label: string; mode: ViewMode; layers: Layers }[] =
   { id: 'complete', label: 'Vue complète', mode: 'complete', layers: { skin: 0.15, muscles: 1, ligaments: 1, bones: 1 } },
   { id: 'deep', label: 'Articulation', mode: 'complete', layers: { skin: 0, muscles: 0.06, ligaments: 1, bones: 1 } },
   { id: 'exploded', label: 'Vue éclatée', mode: 'exploded', layers: { skin: 0, muscles: 1, ligaments: 1, bones: 1 } },
+  { id: 'nerves', label: 'Nerfs', mode: 'complete', layers: { skin: 0, muscles: 0.12, ligaments: 0.6, bones: 1, nerves: 1 } },
   { id: 'xray', label: 'Rayons X', mode: 'xray', layers: { skin: 0.08, muscles: 0.12, ligaments: 0.6, bones: 1 } },
 ]
 
@@ -36,8 +37,8 @@ export default function AnatomyLab({ jointId = 'genou', onClose }: { jointId?: s
   const applyPreset = (id: string) => { const p = PRESETS.find((x) => x.id === id)!; setPreset(id); setMode(p.mode); setLayers(p.layers) }
   const slider = (k: keyof Layers, label: string, swatch: string) => (
     <label className="lab-row">
-      <span className="row" style={{ gap: 8 }}><i className="sw" style={{ background: swatch }} /><span className="grow">{label}</span><b>{Math.round(layers[k] * 100)} %</b></span>
-      <input type="range" min={0} max={100} value={Math.round(layers[k] * 100)} onChange={(e) => { setLayers({ ...layers, [k]: +e.target.value / 100 }); setPreset('') }} />
+      <span className="row" style={{ gap: 8 }}><i className="sw" style={{ background: swatch }} /><span className="grow">{label}</span><b>{Math.round((layers[k] ?? 0) * 100)} %</b></span>
+      <input type="range" min={0} max={100} value={Math.round((layers[k] ?? 0) * 100)} onChange={(e) => { setLayers({ ...layers, [k]: +e.target.value / 100 }); setPreset('') }} />
     </label>
   )
 
@@ -61,6 +62,7 @@ export default function AnatomyLab({ jointId = 'genou', onClose }: { jointId?: s
           {slider('muscles', 'Muscles et tendons', '#A2423A')}
           {slider('ligaments', 'Ligaments et cartilage', '#C9D8E6')}
           {slider('bones', 'Os', '#E9DDC6')}
+          {J.nerves?.length ? slider('nerves', 'Nerfs', '#E8B90F') : null}
           <span className="eyebrow" style={{ marginTop: 8 }}>Raccourcis</span>
           <div className="lab-presets">{PRESETS.map((p) => <button key={p.id} className="chip" aria-pressed={preset === p.id} onClick={() => applyPreset(p.id)}>{p.label}</button>)}</div>
           <span className="eyebrow" style={{ marginTop: 8 }}>Affichage</span>
