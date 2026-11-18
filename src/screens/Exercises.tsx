@@ -46,9 +46,9 @@ function Stepper({ label, value, step, min = 0, unit = '', onChange }: { label: 
   )
 }
 
-export default function Exercises({ s, update }: Props) {
+export default function Exercises({ s, update, focus }: Props & { focus?: string | null }) {
   const { step, ok, excluded } = filterExercises({ region: s.region, pathologyId: s.pathologyId, phase: s.phase, equipment: s.equipment, minutesPerDay: s.minutesPerDay })
-  const [open, setOpen] = useState<string | null>(s.program[0]?.exerciseId ?? null)
+  const [open, setOpen] = useState<string | null>(focus ?? s.program[0]?.exerciseId ?? null)
   const [templates, setTemplates] = useState(loadTemplates)
   const [showTpl, setShowTpl] = useState(false)
   const [viewing, setViewing] = useState<string | null>(null)

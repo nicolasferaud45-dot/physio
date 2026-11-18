@@ -193,7 +193,7 @@ export default function Home({ s, update, go }: Props) {
               </div>
             ))}
             <div className="row">
-              <button className="btn grow" onClick={() => go('exercises')}>Ajuster</button>
+              <button className="btn grow" onClick={() => go('plan')}>Ajuster</button>
               <button className="btn green grow" onClick={() => go('share')}><Icon name="check" />Tout valider</button>
             </div>
           </div>

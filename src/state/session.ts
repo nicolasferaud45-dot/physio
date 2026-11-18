@@ -4,7 +4,7 @@ import type { Prescription } from '../engine/plan'
 import type { AiAnalysis } from '../engine/claude'
 
 export type PresentView = 'compare' | 'normal' | 'patho'
-export type Screen = 'situation' | 'presentation' | 'exercises' | 'share'
+export type Screen = 'pathology' | 'presentation' | 'plan' | 'share'
 
 export interface Session {
   id: string
@@ -30,6 +30,8 @@ export interface Session {
   ai?: AiAnalysis | null
   presentation: { sick: boolean; vulgar: boolean; layers: Record<'bones' | 'joint' | 'muscles' | 'nerves', boolean>; view?: PresentView; panel?: boolean }
   captures: string[]
+  /** dossier praticien (privé) */
+  dossier?: { front?: string; back?: string; notes: string; savedAt?: number }
   savedAt: number
 }
 
@@ -37,7 +39,7 @@ export const emptySession = (): Session => ({
   id: Math.random().toString(36).slice(2, 10),
   createdAt: Date.now(),
   patientLabel: 'Patient',
-  screen: 'situation',
+  screen: 'pathology',
   region: null, side: null, pathologyId: null, phase: null, eva: 5, irritability: 1,
   goals: [], equipment: [], minutesPerDay: null, redFlagsCleared: false, program: [], prompt: '',
   presentation: { sick: true, vulgar: true, layers: { bones: true, joint: true, muscles: true, nerves: false }, view: 'compare', panel: true },
@@ -51,7 +53,9 @@ const TEMPLATES_KEY = 'physio.templates.v1'
 
 function migrate(x: Partial<Session>): Session {
   const s = { ...emptySession(), ...x } as Session
-  if ((s.screen as string) === 'home' || (s.screen as string) === 'context') s.screen = 'situation'
+  const sc = s.screen as string
+  if (sc === 'home' || sc === 'context' || sc === 'situation') s.screen = 'pathology'
+  if (sc === 'exercises') s.screen = 'plan'
   return s
 }
 function loadAll(): Session[] {
@@ -94,7 +98,7 @@ export function usePatients() {
   const remove = useCallback((id: string) => setAll((list) => list.filter((x) => x.id !== id)), [])
   const open = useCallback((id: string | null) => {
     // Un patient rouvert repart côté praticien (jamais directement sur un écran tourné vers le patient)
-    if (id) setAll((list) => list.map((x) => (x.id === id && (x.screen === 'presentation' || x.screen === 'share') ? { ...x, screen: 'exercises' } : x)))
+    if (id) setAll((list) => list.map((x) => (x.id === id && (x.screen === 'presentation' || x.screen === 'share') ? { ...x, screen: x.pathologyId ? 'plan' : 'pathology' } : x)))
     setCurrentId(id)
   }, [])
   return { all, current, update, create, remove, open }

@@ -16,7 +16,7 @@ const SPORTS = Array.from(new Set(Object.values(GOAL_SPORTS)))
 const TIMES: [number, string][] = [[5, '5 min'], [12, '10–15 min'], [25, '20–30 min'], [40, '+30 min']]
 const IRRIT = ['Faible', 'Modérée', 'Élevée']
 
-export default function Context({ s, update, go }: Props) {
+export default function Context({ s, update, go, compact }: Props & { compact?: boolean }) {
   const patho = pathologyById(s.pathologyId)
   const [sportOpen, setSportOpen] = useState(false)
   const step = phaseToPlanStep(s.phase)
@@ -28,31 +28,31 @@ export default function Context({ s, update, go }: Props) {
   const toExercises = () => {
     // Re-suggérer si le programme est vide ou si le contexte a changé la phase
     if (s.program.length === 0) update((x) => ({ program: suggestProgram({ region: x.region, pathologyId: x.pathologyId, phase: x.phase, equipment: x.equipment, minutesPerDay: x.minutesPerDay }) }))
-    go('exercises')
+    go('plan')
   }
 
   return (
     <div id="contexte" className="cols" style={{ maxWidth: 1180, margin: '0 auto', scrollMarginTop: 12 }}>
       <section className="card stack" style={{ gap: 22 }} aria-label="Profil rapide">
-        <div className="stack" style={{ gap: 4 }}>
+        {!compact && <div className="stack" style={{ gap: 4 }}>
           <h2>Contexte patient{patho ? ` · ${patho.label}` : ''}</h2>
           <span className="small muted">Uniquement ce qui sert à construire le plan, sans saisie clavier.</span>
-        </div>
+        </div>}
 
-        <fieldset className="stack" style={{ border: 0, padding: 0, margin: 0, gap: 8 }}>
+        {!compact && <fieldset className="stack" style={{ border: 0, padding: 0, margin: 0, gap: 8 }}>
           <legend className="eyebrow" style={{ marginBottom: 8 }}>Phase clinique</legend>
           <div className="seg">
             {(Object.keys(PHASE_LABEL) as Phase[]).map((p) => (
               <button key={p} aria-pressed={s.phase === p} onClick={() => update({ phase: p })}>{PHASE_LABEL[p]}</button>
             ))}
           </div>
-        </fieldset>
+        </fieldset>}
 
         <div className="cols" style={{ gap: 24 }}>
-          <label className="stack" style={{ gap: 6, flexBasis: 220 }}>
+          {!compact && <label className="stack" style={{ gap: 6, flexBasis: 220 }}>
             <span className="row"><span className="eyebrow grow">Douleur (EVA)</span><span style={{ fontSize: 26, fontWeight: 700, color: '#B5452B' }}>{s.eva}<span className="small muted">/10</span></span></span>
             <input className="pain" type="range" min={0} max={10} value={s.eva} onChange={(e) => update({ eva: +e.target.value })} />
-          </label>
+          </label>}
           <label className="stack" style={{ gap: 6, flexBasis: 220 }}>
             <span className="row"><span className="eyebrow grow">Irritabilité</span><span style={{ fontSize: 18, fontWeight: 700 }}>{IRRIT[s.irritability]}</span></span>
             <input type="range" min={0} max={2} value={s.irritability} onChange={(e) => update({ irritability: +e.target.value as 0 | 1 | 2 })} />
@@ -93,7 +93,7 @@ export default function Context({ s, update, go }: Props) {
         </fieldset>
       </section>
 
-      <section className="stack" aria-label="Aide à la décision">
+      {!compact && <section className="stack" aria-label="Aide à la décision">
         {patho ? (
           s.redFlagsCleared ? (
             <div className="alert ok row"><Icon name="check" /><span className="grow">Drapeaux rouges écartés</span><button className="btn ghost" onClick={() => update({ redFlagsCleared: false })}>Revoir</button></div>
@@ -128,7 +128,7 @@ export default function Context({ s, update, go }: Props) {
             <button className="btn" onClick={toExercises}>Passer directement au programme <Icon name="next" /></button>
           </div>
         )}
-      </section>
+      </section>}
     </div>
   )
 }
