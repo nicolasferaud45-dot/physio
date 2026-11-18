@@ -153,8 +153,11 @@ export function Dossier({ s, update, onClose }: Props) {
         doc.addImage(c, 'PNG', 15, 24, (hgt * im.width) / im.height, hgt)
       }
       const name = `dossier-${s.patientLabel.replace(/[^a-z0-9]+/gi, '-').toLowerCase()}-${date.toISOString().slice(0, 10)}.pdf`
-      doc.save(name)
-      setMsg('PDF téléchargé.')
+      // Dans l'artifact Claude, le téléchargement passe par la capacité « downloads » ; ailleurs, enregistrement direct
+      const c = (window as unknown as { claude?: { use: (n: string) => Promise<unknown> } }).claude
+      const dl = c?.use ? (await Promise.race([c.use('downloads'), new Promise((r) => setTimeout(() => r(null), 1500))])) as { save: (o: { filename: string; data: Blob }) => Promise<unknown> } | null : null
+      if (dl) { await dl.save({ filename: name, data: doc.output('blob') }); setMsg('PDF enregistré.') }
+      else { doc.save(name); setMsg('PDF téléchargé.') }
     } catch {
       setMsg('Le téléchargement est bloqué dans cet aperçu. Utilisez la version en ligne (GitHub) pour exporter.')
     }
