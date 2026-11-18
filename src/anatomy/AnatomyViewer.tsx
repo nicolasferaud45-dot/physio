@@ -11,6 +11,7 @@ import type { JointDef, LigamentDef, MuscleGroup, NerveDef, PathoVisual, V3 } fr
 
 export interface Layers { skin: number; muscles: number; ligaments: number; bones: number; nerves?: number }
 export type ViewMode = 'complete' | 'exploded' | 'xray'
+export interface CamState { pos: THREE.Vector3; target: THREE.Vector3; v: number; src: string }
 
 export interface ViewerProps {
   joint: JointDef
@@ -34,6 +35,8 @@ export interface ViewerProps {
   angleRef?: React.MutableRefObject<number>
   /** degré de liberté animé */
   motion?: string
+  /** vues comparées : rotation et zoom partagés */
+  camSync?: { ref: React.MutableRefObject<CamState | null>; id: string; on: boolean }
   /** compensations : rôle de muscles précis ('R:nom' côté atteint, 'L:nom' côté opposé) */
   highlight?: Record<string, 'bad' | 'over' | 'under'>
   /** repères numérotés (zones) */
@@ -456,6 +459,20 @@ function Scene(p: ViewerProps & { an: Anatomy; labelSink: React.MutableRefObject
     ctl.current?.target.copy(t); ctl.current?.update()
   }, [J, p.side, p.mode, size.width, size.height, camera])
   const ctl = useRef<import('three-stdlib').OrbitControls>(null)
+  const syncState = useRef({ applying: false, lastV: -1 })
+  useEffect(() => {
+    const c = ctl.current, cs = p.camSync
+    if (!c || !cs) return
+    const onChange = () => {
+      if (syncState.current.applying || !cs.on) return
+      const prev = cs.ref.current
+      const v = (prev?.v ?? 0) + 1
+      cs.ref.current = { pos: camera.position.clone(), target: c.target.clone(), v, src: cs.id }
+      syncState.current.lastV = v
+    }
+    c.addEventListener('change', onChange)
+    return () => c.removeEventListener('change', onChange)
+  }, [p.camSync, camera])
 
   const pvRom = pv?.rom
   const motion = p.motion ?? pv?.motion ?? J.dofs[0].id
@@ -463,6 +480,13 @@ function Scene(p: ViewerProps & { an: Anatomy; labelSink: React.MutableRefObject
   const lo = pvRom ? pvRom[0] : dof.min, hi = pvRom ? pvRom[1] : dof.max
 
   useFrame((_, dt) => {
+    const cs = p.camSync, shared = cs?.ref.current
+    if (cs?.on && shared && shared.src !== cs.id && shared.v !== syncState.current.lastV && ctl.current) {
+      syncState.current.applying = true
+      camera.position.copy(shared.pos); ctl.current.target.copy(shared.target); ctl.current.update()
+      syncState.current.applying = false
+      syncState.current.lastV = shared.v
+    }
     const s = st.current
     dt = Math.min(dt, 0.05)
     // angle
@@ -598,7 +622,7 @@ function Scene(p: ViewerProps & { an: Anatomy; labelSink: React.MutableRefObject
         pointArrow(a, at, j === 0 ? u.clone().negate() : u, 0.8 + 0.25 * Math.sin(performance.now() / 180))
       })
       const mid = tmpA.clone().lerp(tmpB, 0.5)
-      labels.push({ id: 'lig-' + L.def.id, text: torn ? `${p.simple ? L.def.simple : L.def.label} · RUPTURE` : showT ? 'TENSION DU LIGAMENT' : p.simple ? L.def.simple : L.def.label, tone: torn || damaged ? 'bad' : showT ? 'tension' : 'info', world: mid, visible: p.layers.ligaments > 0.3 && (showT || torn || damaged || (!p.compact && p.layers.muscles < 0.5 && p.labels)) })
+      labels.push({ id: 'lig-' + L.def.id, text: torn ? `${p.simple ? L.def.simple : L.def.label} · RUPTURE` : showT ? (p.compact ? `${L.def.simple} · TENSION` : 'TENSION DU LIGAMENT') : p.simple ? L.def.simple : L.def.label, tone: torn || damaged ? 'bad' : showT ? 'tension' : 'info', world: mid, visible: p.layers.ligaments > 0.3 && (showT || torn || damaged || (!p.compact && p.layers.muscles < 0.5 && p.labels)) })
     }
 
     // nerfs : trajet, tension (jaune → rouge), compression
@@ -765,7 +789,10 @@ export default function AnatomyViewer(p: ViewerProps) {
     const el = wrap.current, s = svg.current, bx = boxes.current, cam = camRef.current
     if (!el || !s || !bx || !cam) return
     const W = el.clientWidth, H = el.clientHeight
-    const items = labelSink.current
+    const RANK = { bad: 0, tension: 1, work: 2, info: 3 } as const
+    const items = p.compact
+      ? [...labelSink.current.filter((l) => l.id === 'arc'), ...labelSink.current.filter((l) => l.id !== 'arc').sort((a, b) => RANK[a.tone] - RANK[b.tone]).slice(0, 2)]
+      : labelSink.current
     const used: { x: number; y: number; w: number; h: number }[] = []
     let html = '', lines = ''
     for (const l of items) {

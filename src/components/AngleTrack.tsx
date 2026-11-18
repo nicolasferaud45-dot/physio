@@ -15,12 +15,12 @@ export function AngleTrack({ label, min, max, value, onChange, pain, rom, unit =
         <input type="range" min={min} max={max} value={value} onChange={(e) => onChange(+e.target.value)} aria-label={label} />
       </div>
       <div className="atrack-ticks">
-        <span style={{ left: 0 }}>{min}{unit}</span>
+        {(!pain || (pain[0] - min) / (max - min) > 0.1) && <span style={{ left: 0 }}>{min}{unit}</span>}
         {pain && (pain[1] - pain[0]) / (max - min) < 0.18
           ? <span style={{ left: pct((pain[0] + pain[1]) / 2) }} className="bad">{pain[0]}–{pain[1]}{unit}</span>
           : pain && <><span style={{ left: pct(pain[0]) }} className="bad">{pain[0]}{unit}</span><span style={{ left: pct(pain[1]) }} className="bad">{pain[1]}{unit}</span></>}
         {rom && rom[1] < max && (!pain || Math.abs(rom[1] - pain[1]) / (max - min) > 0.12) && <span style={{ left: pct(rom[1]) }}>max {rom[1]}{unit}</span>}
-        <span style={{ right: 0 }}>{max}{unit}</span>
+        {(!rom || (max - rom[1]) / (max - min) > 0.14) && (!pain || (max - pain[1]) / (max - min) > 0.1) && <span style={{ right: 0 }}>{max}{unit}</span>}
       </div>
     </div>
   )

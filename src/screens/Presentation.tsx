@@ -9,7 +9,7 @@ import ExerciseViewer from './ExerciseViewer'
 const Shoulder3D = lazy(() => import('../three/Shoulder3D'))
 const AnatomyViewer = lazy(() => import('../anatomy/AnatomyViewer'))
 import { jointForRegion } from '../anatomy/registry'
-import type { Layers, ViewMode } from '../anatomy/AnatomyViewer'
+import type { CamState, Layers, ViewMode } from '../anatomy/AnatomyViewer'
 import { AngleTrack } from '../components/AngleTrack'
 import { NerveZone } from '../components/NerveZone'
 import { BODY } from '../anatomy/joints/body'
@@ -72,6 +72,8 @@ export default function Presentation({ s, update, onExit, readOnly }: Props) {
   const [preset, setPreset] = useState(initPreset)
   const [jl, setJl] = useState<{ layers: Layers; mode: ViewMode }>(() => { const p = LAYER_PRESETS.find((x) => x.id === initPreset)!; return { layers: p.layers, mode: p.mode } })
   const [labelsOn, setLabelsOn] = useState(true)
+  const [linked, setLinked] = useState(true)
+  const camShared = useRef<CamState | null>(null)
   const [scope, setScope] = useState<'joint' | 'body'>('joint')
   const [stepFocus, setStepFocus] = useState<number | null>(null)
   const chain = J ? chainFor(patho.region, (jv?.damaged ?? []).filter((d) => d.startsWith('right ') || d.includes(' of right '))) : null
@@ -198,7 +200,8 @@ export default function Presentation({ s, update, onExit, readOnly }: Props) {
           <Suspense fallback={<div className="pane-loading muted">Chargement du modèle 3D…</div>}>
             <AnatomyViewer joint={J} motion={jv.motion} pathology={isNormal ? null : patho.id} layers={jl.layers} mode={jl.mode} labels={labelsOn} indicators
               side={s.side ?? 'D'} simple={simple} playing={false} angle={0} angleRef={angleRef} compact={view === 'compare'} tone={isNormal ? 'ok' : 'bad'}
-              onAngle={isNormal ? undefined : setJPatient} onCanvas={(c) => { canvases.current[kind] = c }} />
+              onAngle={isNormal ? undefined : setJPatient} onCanvas={(c) => { canvases.current[kind] = c }}
+              camSync={view === 'compare' ? { ref: camShared, id: kind, on: linked } : undefined} />
           </Suspense>
         ) : patho.visual ? (
           <Suspense fallback={<div className="pane-loading muted">Chargement du modèle 3D…</div>}>
@@ -304,9 +307,10 @@ export default function Presentation({ s, update, onExit, readOnly }: Props) {
               <AngleTrack label={dof.label} min={dof.min} max={dof.max} value={jAngle} pain={pain} rom={jv.rom ?? null}
                 status={jInPain ? (simple ? 'ça fait mal' : 'zone douloureuse') : null}
                 onChange={(v) => { setPlaying(false); angleRef.current = v; setJAngle(v) }} />
-              {pain && <div className="pv-chips">
-                <button aria-pressed={slowZone} onClick={() => setSlowZone(!slowZone)}>Ralentir dans la zone rouge</button>
-                <button aria-pressed={stopZone} onClick={() => setStopZone(!stopZone)}>Arrêter quand ça fait mal</button>
+              {(pain || view === 'compare') && <div className="pv-chips">
+                {view === 'compare' && <button aria-pressed={linked} onClick={() => setLinked(!linked)} title="Tourner et zoomer les deux vues ensemble"><Icon name="link" size={14} /> Vues liées</button>}
+                {pain && <button aria-pressed={slowZone} onClick={() => setSlowZone(!slowZone)}>Ralentir dans la zone rouge</button>}
+                {pain && <button aria-pressed={stopZone} onClick={() => setStopZone(!stopZone)}>Arrêter quand ça fait mal</button>}
               </div>}
               <Popover label="Calques" icon={<Icon name="grid" size={18} />} width={300}>
                 <span className="eyebrow">Vue</span>

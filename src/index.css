@@ -582,3 +582,24 @@ i.ok { background: #2E7D5B; } i.bad { background: #C2412D; }
   .pv-chips { flex-direction: row; }
   .pv-chips button { min-height: 28px; }
 }
+
+/* ---------- Téléphone en portrait : la page défile, les vues 3D gardent une vraie hauteur */
+@media (max-width: 760px) and (orientation: portrait) {
+  .pv { overflow-y: auto; -webkit-overflow-scrolling: touch; }
+  .pv-main { flex: none; display: flex; flex-direction: column; min-height: auto; }
+  .pv-stage { flex: none; min-height: auto; }
+  .pv-panes { flex: none; height: max(430px, 64svh); }
+  .pv-panes.one { height: max(380px, 58svh); }
+  .pv-side { flex: none; max-height: none; }
+  .pv-top { gap: 6px; padding: 6px 8px; }
+  .pv-top .viewswitch button { min-height: 40px; font-size: 14px; }
+  .pv-title { font-size: 16px !important; padding: 0 4px; white-space: normal; }
+  .pane-tag { font-size: 12.5px; padding: 5px 9px; }
+  .pv-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 8px; position: sticky; bottom: 0; z-index: 3; background: #fff; border-top: 1px solid var(--line); }
+  .pv-bar .play { order: 0; flex: none; width: 48px; height: 48px; }
+  .pv-bar .atrack { order: 1; flex: 1 1 calc(100% - 60px); min-width: 0; }
+  .pv-bar .pv-chips { order: 2; flex: 1 1 100%; flex-direction: row; flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
+  .pv-bar .pv-chips::-webkit-scrollbar { display: none; }
+  .pv-bar > :not(.play):not(.atrack):not(.pv-chips) { order: 3; }
+  .atrack-head .lbl { font-size: 12px; }
+}

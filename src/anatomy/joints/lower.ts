@@ -166,7 +166,7 @@ export const ANKLE: JointDef = {
     { id: 'fascia', label: 'Fascia plantaire', simple: 'Toile sous le pied', seg: 'foot', kind: 'meniscus', build: () => band([[-0.085, 0.004, 0.02], [-0.08, 0.002, 0.08], [-0.075, 0.004, 0.15], [-0.072, 0.008, 0.2]], 0.03, 0.003) },
   ],
   actions: { increasing: 'flexor', decreasing: 'extensor', hold: 'extensor' },
-  camera: { pos: [-0.62, 0.22, 0.45], target: [-0.08, 0.07, 0.08], fov: 30, frame: [0.3, 0.3] },
+  camera: { pos: [-0.62, 0.2, 0.45], target: [-0.08, 0.055, 0.09], fov: 30, frame: [0.26, 0.26] },
   arc: { radius: 0.13, offset: [-0.06, 0, 0] },
   clip: { minY: -0.1, maxY: 0.36 },
   pathologies: {
