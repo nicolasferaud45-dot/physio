@@ -4,9 +4,10 @@ import { lay } from '../data/lay'
 import { PHASE_LABEL, pathologyById, regionLabel } from '../data/catalog'
 import type { Screen, Session } from '../state/session'
 import {
-  ageOf, currentEpisode, fmtDate, patchEpisode, REGION_COLOR, rxLeft, startEpisode, STATUS_LABEL, switchTo,
+  ageOf, currentEpisode, FEELING_LABEL, fmtDate, NEXT_LABEL, patchEpisode, previousVisit, REGION_COLOR, rxLeft, startEpisode, startVisit, STATUS_LABEL, switchTo,
   type Episode, type Profile,
 } from '../state/record'
+import { homeSince, SketchThumbs } from './Seance'
 import { clean, savePdf } from '../lib/pdf'
 
 type Update = (p: Partial<Session> | ((s: Session) => Partial<Session>)) => void
@@ -25,8 +26,9 @@ export default function Overview({ s, update, go, onPatients, onNotes }: { s: Se
   const [diag, setDiag] = useState<Episode | null>(null)
   const [msg, setMsg] = useState<string | null>(null)
 
-  const work = (e: Episode, sc: Screen) => { if (e.id !== s.episodeId) update(switchTo(s, e.id)); go(sc) }
-  const newEp = () => { const p = startEpisode(s); update(p); setSel(p.episodeId ?? null) }
+  // démarrer (ou reprendre) la séance du jour sur un épisode
+  const start = (e: Episode) => { if (e.id !== s.episodeId) update(switchTo(s, e.id)); update((x) => startVisit(x)) }
+  const newEp = () => { const p = startEpisode(s); update(p); setSel(p.episodeId ?? null); update((x) => startVisit(x)) }
 
   const pdf = async () => {
     setMsg('Création du PDF…')
@@ -50,16 +52,8 @@ export default function Overview({ s, update, go, onPatients, onNotes }: { s: Se
       <main className="content ov">
         <div className="ov-grid">
           <div className="ov-main">
-            <ProfileCard p={s.profile ?? {}} onChange={(p) => update((x) => ({ profile: { ...x.profile, ...p } }))} />
-
-            {cur && (
-              <div className="ov-cta">
-                {cur.pathologyId
-                  ? <button className="btn primary pk-primary" onClick={() => work(cur, 'plan')}><Icon name="plus" />Séance du jour</button>
-                  : <button className="btn primary pk-primary" onClick={() => work(cur, 'pathology')}><Icon name="person" />Choisir la pathologie</button>}
-                <button className="btn" onClick={newEp}><Icon name="plus" />Nouvelle douleur</button>
-              </div>
-            )}
+            {cur && <BeforeCard s={s} ep={cur} onStart={() => start(cur)} onNew={newEp} />}
+            <ProfileCard p={s.profile ?? {}} hideAlert={!!cur} onChange={(p) => update((x) => ({ profile: { ...x.profile, ...p } }))} />
 
             <section className="card ov-tl-card">
               <div className="row"><h2 className="grow" style={{ fontSize: 18 }}>Historique</h2><span className="small muted">{eps.length} épisode{eps.length > 1 ? 's' : ''} · {((n) => `${n} séance${n > 1 ? 's' : ''}`)(eps.reduce((n, e) => n + e.visits.length, 0))}</span></div>
@@ -69,19 +63,51 @@ export default function Overview({ s, update, go, onPatients, onNotes }: { s: Se
 
           {ep && (
             <aside className="card ov-ep">
-              <EpisodePanel s={s} ep={ep} current={ep.id === s.episodeId} update={update} work={work} onDiag={() => setDiag(ep)} />
+              <EpisodePanel s={s} ep={ep} current={ep.id === s.episodeId} update={update} onStart={() => start(ep)} onDiag={() => setDiag(ep)} />
             </aside>
           )}
         </div>
       </main>
-      {diag && <DiagSheet ep={diag} onClose={() => setDiag(null)} onGo={(kind, reason) => { if (diag.id !== s.episodeId) update(switchTo(s, diag.id)); update({ diagMode: { kind, reason } }); setDiag(null); go('pathology') }} />}
+      {diag && <DiagSheet ep={diag} onClose={() => setDiag(null)} onGo={(kind, reason) => { if (diag.id !== s.episodeId) update(switchTo(s, diag.id)); update({ diagMode: { kind, reason }, visitId: undefined }); setDiag(null); go('pathology') }} />}
       {msg && <div className="toast" role="status">{msg}</div>}
     </div>
   )
 }
 
+/* ----------------------------------------------------------- avant la séance */
+function BeforeCard({ s, ep, onStart, onNew }: { s: Session; ep: Episode; onStart: () => void; onNew: () => void }) {
+  const open = ep.visits.find((v) => v.status === 'open')
+  const closed = ep.visits.filter((v) => v.status !== 'open').sort((a, b) => a.at - b.at)
+  const last = previousVisit(ep)
+  const trend = closed.slice(-3)
+  const down = trend.length >= 2 && trend[trend.length - 1].eva < trend[0].eva
+  const up = trend.length >= 2 && trend[trend.length - 1].eva > trend[trend.length - 2].eva
+  const home = last ? homeSince(s, last.at) : null
+  const left = rxLeft(ep)
+  const days = last ? Math.round((Date.now() - last.at) / DAY) : null
+  return (
+    <section className="card ov-before">
+      <div className="stack" style={{ gap: 2 }}><span className="pk-eyebrow" style={{ margin: 0, color: 'var(--blue-dark)' }}>{open ? 'Séance en cours' : 'Avant la séance'}</span><strong style={{ fontSize: 17 }}>{nameOf(ep)}{ep.side ? ` · ${sideOf(ep.side)}` : ''}</strong></div>
+      {s.profile?.alerts && <div className="ov-alert"><Icon name="alert" size={18} /><span><b>À surveiller : </b>{s.profile.alerts}</span></div>}
+      {ep.pathologyId && (
+        <div className="ov-stats">
+          <div><span>Dernière séance</span><b>{last ? fmtDate(last.at) : 'Aucune'}</b><small>{days === null ? 'première séance' : days === 0 ? 'aujourd\'hui' : `il y a ${days} jour${days > 1 ? 's' : ''}`}</small></div>
+          <div><span>Douleur</span><b>{last ? `${last.eva}/10` : '–'}</b><small className={down ? 'good' : up ? 'bad' : ''}>{down ? `en baisse depuis ${trend.length} séances` : up ? 'en hausse' : last ? 'stable' : ''}</small></div>
+          <div><span>À la maison</span><b>{home && home.days ? `${home.days} jour${home.days > 1 ? 's' : ''}` : '–'}</b><small>{home && home.days ? (home.avgPain !== null ? `douleur ${home.avgPain}/10` : 'exercices notés') : last ? 'pas de retour' : ''}</small></div>
+          <div className={left !== null && left <= 1 ? 'warn' : ''}><span>Ordonnance</span><b>{left !== null ? `${left} restante${left > 1 ? 's' : ''}` : '–'}</b><small>{ep.rx?.count ? `sur ${ep.rx.count}` : 'non saisie'}</small></div>
+        </div>
+      )}
+      {last?.note && <p className="ov-lastnote"><b>La dernière fois : </b>« {last.note} »{last.next ? <span className="muted"> · revoir {NEXT_LABEL[last.next]}</span> : null}</p>}
+      <div className="ov-cta">
+        <button className="btn primary pk-primary" onClick={onStart}><Icon name={open ? 'next' : 'play'} />{open ? 'Reprendre la séance' : ep.pathologyId ? 'Démarrer la séance' : 'Choisir la pathologie'}</button>
+        <button className="btn" onClick={onNew}><Icon name="plus" />Nouvelle douleur</button>
+      </div>
+    </section>
+  )
+}
+
 /* ----------------------------------------------------------- profil */
-function ProfileCard({ p, onChange }: { p: Profile; onChange: (p: Partial<Profile>) => void }) {
+function ProfileCard({ p, onChange, hideAlert }: { p: Profile; onChange: (p: Partial<Profile>) => void; hideAlert?: boolean }) {
   const empty = !p.birthYear && !p.job && !p.sport && !p.dominant && !p.history && !p.meds && !p.alerts
   const [edit, setEdit] = useState(false)
   const age = ageOf(p)
@@ -92,7 +118,7 @@ function ProfileCard({ p, onChange }: { p: Profile; onChange: (p: Partial<Profil
         <h2 className="grow" style={{ fontSize: 18 }}>Profil</h2>
         <button className="btn ghost" style={{ minHeight: 40 }} onClick={() => setEdit(!edit)}>{edit ? <><Icon name="check" size={18} />Terminé</> : <><Icon name="pen" size={18} />Modifier</>}</button>
       </div>
-      {p.alerts && <div className="ov-alert"><Icon name="alert" size={18} /><span><b>À surveiller : </b>{p.alerts}</span></div>}
+      {p.alerts && !hideAlert && <div className="ov-alert"><Icon name="alert" size={18} /><span><b>À surveiller : </b>{p.alerts}</span></div>}
       {!edit && (
         <div className="stack" style={{ gap: 6 }}>
           {facts.length > 0 && <div className="row wrap" style={{ gap: 6 }}>{facts.map((f) => <span key={f} className="tag grey">{f}</span>)}</div>}
@@ -232,7 +258,7 @@ function TimelineList({ eps, sel, onSel }: { eps: Episode[]; sel: string | null;
 }
 
 /* ----------------------------------------------------------- épisode */
-function EpisodePanel({ s, ep, current, update, work, onDiag }: { s: Session; ep: Episode; current: boolean; update: Update; work: (e: Episode, sc: Screen) => void; onDiag: () => void }) {
+function EpisodePanel({ s, ep, current, update, onStart, onDiag }: { s: Session; ep: Episode; current: boolean; update: Update; onStart: () => void; onDiag: () => void }) {
   const patho = pathologyById(ep.pathologyId)
   const set = (p: Partial<Episode> | ((e: Episode) => Partial<Episode>)) => update((x) => patchEpisode(x, ep.id, p))
   const left = rxLeft(ep)
@@ -253,9 +279,8 @@ function EpisodePanel({ s, ep, current, update, work, onDiag }: { s: Session; ep
       </div>
 
       <div className="ov-actions">
-        {ep.pathologyId && <button className="btn primary" onClick={() => work(ep, 'plan')}><Icon name="plus" />{current ? 'Séance du jour' : 'Reprendre'}</button>}
-        {ep.pathologyId && <button className="btn" onClick={() => work(ep, 'presentation')}><Icon name="screen" />Montrer en 3D</button>}
-        <button className="btn" onClick={ep.pathologyId ? onDiag : () => work(ep, 'pathology')}><Icon name="pen" size={18} />{ep.pathologyId ? 'Modifier la pathologie' : 'Choisir la pathologie'}</button>
+        {!current && <button className="btn primary" onClick={onStart}><Icon name="play" />Démarrer une séance</button>}
+        <button className="btn" onClick={ep.pathologyId ? onDiag : onStart}><Icon name="pen" size={18} />{ep.pathologyId ? 'Modifier la pathologie' : 'Choisir la pathologie'}</button>
         {ep.status !== 'termine' ? <button className="btn ghost" onClick={finish}><Icon name="check" />Terminer l'épisode</button>
           : <button className="btn ghost" onClick={relapse}><Icon name="refresh" />Récidive</button>}
       </div>
@@ -285,17 +310,21 @@ function EpisodePanel({ s, ep, current, update, work, onDiag }: { s: Session; ep
 
       <div className="stack" style={{ gap: 6 }}>
         <span className="pk-eyebrow" style={{ margin: 0 }}>Séances ({visits.length})</span>
-        {visits.length === 0 && <p className="small muted" style={{ margin: 0 }}>Une séance est enregistrée automatiquement dès que vous travaillez sur cet épisode (une par jour).</p>}
+        {visits.length === 0 && <p className="small muted" style={{ margin: 0 }}>Les séances apparaissent ici quand vous les terminez (« Enregistrer au dossier »).</p>}
         <ul className="ov-visits">
           {visits.map((v, i) => (
-            <li key={v.id}>
+            <li key={v.id} className={v.status === 'open' ? 'open' : ''}>
               <div className="row" style={{ gap: 8 }}>
                 <strong className="grow">{fmtDate(v.at, true)}</strong>
+                {v.status === 'open' && <span className="tag blue">En cours</span>}
+                {v.auto && <span className="small muted" title="Séance non terminée, fermée automatiquement">fermée auto.</span>}
                 {v.phase && <span className="small muted">{PHASE_LABEL[v.phase]}</span>}
                 <span className={'ov-eva' + (v.eva >= 7 ? ' hi' : v.eva <= 3 ? ' lo' : '')}>{v.eva}/10</span>
               </div>
-              {visits[i + 1] && <span className="small muted">{v.eva < visits[i + 1].eva ? `↓ ${visits[i + 1].eva - v.eva} depuis la séance précédente` : v.eva > visits[i + 1].eva ? `↑ ${v.eva - visits[i + 1].eva} depuis la séance précédente` : 'Stable'}{v.nEx ? ` · ${v.nEx} exercice${v.nEx > 1 ? 's' : ''}` : ''}</span>}
+              <span className="small muted">{[visits[i + 1] ? (v.eva < visits[i + 1].eva ? `↓ ${visits[i + 1].eva - v.eva}` : v.eva > visits[i + 1].eva ? `↑ ${v.eva - visits[i + 1].eva}` : 'stable') : '', v.feeling ? `se sent ${FEELING_LABEL[v.feeling].toLowerCase()}` : '', v.explained ? 'expliqué en 3D' : '', v.shared ? 'programme remis' : ''].filter(Boolean).join(' · ')}</span>
+              {(v.clinic?.length || v.clinicOther) ? <span className="small">En cabinet : {[...(v.clinic ?? []), ...(v.clinicOther ? [v.clinicOther] : [])].join(', ')}</span> : null}
               <input className="ov-note" value={v.note ?? ''} onChange={(e) => set((x) => ({ visits: x.visits.map((y) => (y.id === v.id ? { ...y, note: e.target.value } : y)) }))} placeholder="Note de séance…" aria-label={`Note du ${fmtDate(v.at)}`} />
+              {(v.sketch?.front || v.sketch?.back) && <SketchThumbs v={v} size={52} />}
             </li>
           ))}
         </ul>

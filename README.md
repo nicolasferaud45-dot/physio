@@ -48,6 +48,21 @@ Les vues 3D utilisent **BodyParts3D** (modèles issus de scanners, © The Databa
 - **Exercices** : les 58 animations pilotent le corps réel (squelette + muscles colorés par rôle).
 - Démonstrateur du cahier des charges : `#anat-genou` (ou `#anat-epaule`, `#anat-lombaire`…).
 
+## Parcours v3 : dossier au centre, séance guidée (v0.8)
+
+**Mes patients → Dossier du patient → Séance guidée.** On entre dans une séance depuis le dossier et on en sort par « Enregistrer au dossier ».
+
+- **Mes patients** : signaux utiles sur chaque carte (séance en cours, douleur en hausse, retours maison, dernière séance d'ordonnance).
+- **Dossier** : carte « Avant la séance » (précautions, dernière séance, douleur et tendance, retours maison, séances restantes, note de la dernière fois), bouton « Démarrer la séance » / « Reprendre », profil, historique, épisodes et séances avec leur note et leurs dessins.
+- **Séance** : Pathologie (première séance seulement) → Bilan → Expliquer (écran patient) → En cabinet → À la maison (écran patient) → Terminer. Chaque étape peut être passée ; la barre d'étapes n'existe que pendant une séance.
+- **Bilan** : douleur comparée à la dernière fois, ressenti, retours du programme maison, drapeaux rouges.
+- **En cabinet** : gestes faits pendant la séance (à cocher) et exercices faits avec le patient.
+- **Terminer** : résumé pré-rempli (on corrige en touchant une ligne), note dictée, dessins de la séance, prochaine séance, ordonnance.
+- **Crayon flottant** : note ou dessin rattachés à la séance en cours. Hors séance, notes générales du patient.
+- Une séance oubliée est fermée automatiquement le lendemain avec ce qui a été saisi (« fermée auto. »).
+- **Dossiers fictifs** « Patient test 1, 2, 3 » (marqués *Fictif*) ajoutés une fois par appareil ; bouton pour les rajouter s'ils ont été supprimés. Code : `src/data/demo.ts`.
+- Code : `src/screens/Seance.tsx`, `src/state/record.ts` (cycle de vie des séances).
+
 ## Dossier patient (v0.7)
 
 Un patient a un **profil** (âge, côté dominant, métier, sport, antécédents, traitements, précautions en rouge), des **épisodes de soin** (une pathologie + un côté, statut en cours / terminé / récidive, motif, ordonnance avec séances restantes) et des **séances** (une par jour, créée dès qu'on travaille sur l'épisode : douleur, phase, nombre d'exercices, note).

@@ -2,12 +2,12 @@ import { useState } from 'react'
 import { lay } from '../data/lay'
 import { Icon } from '../components/Icon'
 import { pathologyById, regionLabel } from '../data/catalog'
-import { loadLog, type Screen, type Session } from '../state/session'
+import { loadLog, type Session } from '../state/session'
+import { currentEpisode, rxLeft } from '../state/record'
 
-const STEP_LABEL: Record<Screen, string> = { overview: 'Dossier', pathology: 'Pathologie', presentation: 'Montrer', plan: 'Plan', share: 'Remise' }
 
 /** Accueil praticien : les patients suivis sur cette tablette et leurs retours. */
-export default function PatientsHome({ patients, onOpen, onCreate, onRemove }: { patients: Session[]; onOpen: (id: string) => void; onCreate: () => void; onRemove: (id: string) => void }) {
+export default function PatientsHome({ patients, onOpen, onCreate, onRemove, onSeed }: { patients: Session[]; onOpen: (id: string) => void; onCreate: () => void; onRemove: (id: string) => void; onSeed: () => void }) {
   const [confirm, setConfirm] = useState<string | null>(null)
   const [q, setQ] = useState('')
   const sorted = [...patients].sort((a, b) => b.savedAt - a.savedAt).filter((p) => !q || (p.patientLabel + ' ' + (pathologyById(p.pathologyId)?.label ?? '') + ' ' + lay(p.pathologyId)).toLowerCase().includes(q.toLowerCase()))
@@ -29,20 +29,29 @@ export default function PatientsHome({ patients, onOpen, onCreate, onRemove }: {
         )}
         {sorted.map((p) => {
           const patho = pathologyById(p.pathologyId)
+          const ep = currentEpisode(p)
+          const closed = (ep?.visits ?? []).filter((v) => v.status !== 'open').sort((a, b) => a.at - b.at)
+          const lastV = closed[closed.length - 1], prevV = closed[closed.length - 2]
+          const open = ep?.visits.some((v) => v.status === 'open')
+          const left = ep ? rxLeft(ep) : null
           const log = p.shareKey ? loadLog(p.shareKey) : []
-          const last = log[log.length - 1]
+          const since = lastV ? new Date(lastV.at).toISOString().slice(0, 10) : ''
+          const home = log.filter((x) => x.date > since).length
+          const days = lastV ? Math.round((Date.now() - lastV.at) / 864e5) : null
           return (
             <div key={p.id} className="row" style={{ gap: 8 }}>
               <button className="patient-card" onClick={() => onOpen(p.id)}>
-                <div className="avatar">{p.patientLabel.slice(0, 2).toUpperCase()}</div>
+                <div className="avatar">{p.demo ? 'T' + p.patientLabel.slice(-1) : p.patientLabel.slice(0, 2).toUpperCase()}</div>
                 <div className="stack grow" style={{ gap: 4 }}>
-                  <strong style={{ fontSize: 17 }}>{p.patientLabel}</strong>
-                  <span className="small muted">{patho ? lay(patho.id, patho.label) : p.region ? regionLabel(p.region) : 'Pathologie à choisir'}{p.side ? ` · ${p.side === 'D' ? 'droite' : 'gauche'}` : ''} · {new Date(p.savedAt).toLocaleDateString('fr-CH', { day: 'numeric', month: 'short' })}</span>
-                  <div className="row wrap" style={{ gap: 8 }}>
-                    {(p.episodes?.length ?? 0) > 1 && <span className="tag grey">{p.episodes!.length} épisodes</span>}
-                    {p.done ? <span className="tag green">Programme remis · {p.program.length} exercice{p.program.length > 1 ? 's' : ''}</span>
-                      : <span className="tag blue">À continuer · {STEP_LABEL[p.screen]}</span>}
-                    {last && <span className={'feedback' + ((last.pain ?? 0) > Math.max(...p.program.map((x) => x.maxPain), 3) ? ' bad' : '')}>{log.length} séance{log.length > 1 ? 's' : ''} faite{log.length > 1 ? 's' : ''}{last.pain !== null ? ` · douleur ${last.pain}/10` : ''}</span>}
+                  <strong style={{ fontSize: 17 }}>{p.patientLabel}{p.demo && <span className="tag grey" style={{ marginLeft: 8, height: 24, fontSize: 12 }}>Fictif</span>}</strong>
+                  <span className="small muted">{patho ? lay(patho.id, patho.label) : p.region ? regionLabel(p.region) : 'Pathologie à choisir'}{p.side ? ` · ${p.side === 'D' ? 'droite' : 'gauche'}` : ''}{closed.length ? ` · ${closed.length} séance${closed.length > 1 ? 's' : ''}` : ''}</span>
+                  <div className="row wrap" style={{ gap: 6 }}>
+                    {open && <span className="tag blue">Séance en cours</span>}
+                    {lastV && prevV && lastV.eva > prevV.eva && <span className="tag red">Douleur en hausse · {lastV.eva}/10</span>}
+                    {home > 0 && <span className="tag green">Maison : {home} jour{home > 1 ? 's' : ''}</span>}
+                    {left !== null && left <= 1 && <span className="tag amber">{left === 0 ? 'Ordonnance terminée' : '1 séance restante'}</span>}
+                    {days !== null && <span className="tag grey">Vu il y a {days === 0 ? 'moins d\'un jour' : `${days} j`}</span>}
+                    {!lastV && !open && <span className="tag grey">Nouveau</span>}
                   </div>
                 </div>
                 <Icon name="next" />
@@ -52,7 +61,8 @@ export default function PatientsHome({ patients, onOpen, onCreate, onRemove }: {
             </div>
           )
         })}
-        {patients.length > 0 && <p className="small muted" style={{ textAlign: 'center', margin: 0 }}>Les retours du patient (séances, douleur) s'affichent ici quand il utilise son programme sur cet appareil.</p>}
+        {patients.length > 0 && <p className="small muted" style={{ textAlign: 'center', margin: 0 }}>Les retours du patient (exercices faits, douleur) s'affichent ici quand il utilise son programme sur cet appareil.</p>}
+        {!patients.some((p) => p.demo) && <button className="btn ghost" onClick={onSeed}>Ajouter les 3 dossiers de test (fictifs)</button>}
       </div>
     </div>
   )

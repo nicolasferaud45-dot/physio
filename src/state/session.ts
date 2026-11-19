@@ -2,10 +2,10 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import type { Equipment, Phase, RegionId } from '../data/catalog'
 import type { Prescription } from '../engine/plan'
 import type { AiAnalysis } from '../engine/claude'
-import { ensureRecord, newEpisode, syncRecord, type Episode, type Profile } from './record'
+import { ensureRecord, newEpisode, startVisit, syncRecord, type Episode, type Profile } from './record'
 
 export type PresentView = 'compare' | 'normal' | 'patho'
-export type Screen = 'overview' | 'pathology' | 'presentation' | 'plan' | 'share'
+export type Screen = 'overview' | 'pathology' | 'bilan' | 'presentation' | 'cabinet' | 'plan' | 'share' | 'terminer'
 
 export interface Session {
   id: string
@@ -14,6 +14,8 @@ export interface Session {
   shareKey?: string
   done?: boolean
   patientLabel: string
+  /** dossier fictif de démonstration */
+  demo?: boolean
   screen: Screen
   region: RegionId | null
   side: 'D' | 'G' | null
@@ -37,6 +39,8 @@ export interface Session {
   profile?: Profile
   episodes?: Episode[]
   episodeId?: string
+  /** séance en cours */
+  visitId?: string
   /** changement de pathologie demandé depuis le dossier */
   diagMode?: { kind: 'correct' | 'reeval'; reason?: string }
   savedAt: number
@@ -97,6 +101,7 @@ export function usePatients() {
   const create = useCallback((label?: string) => {
     const n = emptySession()
     const ep = newEpisode({}); n.episodes = [ep]; n.episodeId = ep.id
+    Object.assign(n, startVisit(n))
     setAll((list) => {
       if (!label) { let k = list.length + 1; while (list.some((x) => x.patientLabel === `Patient ${k}`)) k++; n.patientLabel = `Patient ${k}` } else n.patientLabel = label
       return [n, ...list]
@@ -104,12 +109,14 @@ export function usePatients() {
     setCurrentId(n.id)
   }, [])
   const remove = useCallback((id: string) => setAll((list) => list.filter((x) => x.id !== id)), [])
+  /** ajoute des dossiers (démo) absents de la liste */
+  const seed = useCallback((add: Session[]) => setAll((list) => [...list, ...add.filter((a) => !list.some((x) => x.id === a.id)).map(migrate)]), [])
   const open = useCallback((id: string | null) => {
     // Un patient rouvert arrive sur son dossier (jamais directement sur un écran tourné vers le patient)
-    if (id) setAll((list) => list.map((x) => (x.id === id ? { ...x, screen: x.pathologyId || (x.episodes?.length ?? 0) > 1 ? 'overview' : 'pathology', diagMode: undefined } : x)))
+    if (id) setAll((list) => list.map((x) => (x.id === id ? { ...x, screen: 'overview', diagMode: undefined } : x)))
     setCurrentId(id)
   }, [])
-  return { all, current, update, create, remove, open }
+  return { all, current, update, create, remove, open, seed }
 }
 
 /** Clé courte de suivi (même appareil en démo ; serveur en version finale). */

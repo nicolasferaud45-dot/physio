@@ -39,18 +39,12 @@ export default function Plan({ s, update, go }: Props) {
   return (
     <div className="plan">
       <div className="plan-scroll">
-        {patho && <div className="plan-title"><span className="pk-eyebrow" style={{ margin: 0 }}>{patho.label}{s.side ? ` · ${s.side === 'D' ? 'droite' : 'gauche'}` : ''}</span><div className="row" style={{ alignItems: 'flex-end', gap: 10 }}><h1 className="grow">{lay(patho.id, patho.label)}</h1><button className="btn plan-3d" onClick={() => go('presentation')}><Icon name="screen" />Montrer en 3D</button></div></div>}
+        {patho && <div className="plan-title"><span className="pk-eyebrow" style={{ margin: 0 }}>{patho.label}{s.side ? ` · ${s.side === 'D' ? 'droite' : 'gauche'}` : ''}</span><h1>Programme à la maison</h1><span className="small muted">{lay(patho.id, patho.label)}</span></div>}
         <section className="card stack" style={{ gap: 14 }}>
           <div className="stack" style={{ gap: 6 }}>
             <span className="pk-eyebrow" style={{ margin: 0 }}>Phase</span>
             <div className="pk-big-seg small" role="radiogroup" aria-label="Phase">
               {PHASES.map(([p, l]) => <button key={p} role="radio" aria-checked={s.phase === p} onClick={() => setPhase(p)}>{l}</button>)}
-            </div>
-          </div>
-          <div className="stack" style={{ gap: 6 }}>
-            <span className="row"><span className="pk-eyebrow grow" style={{ margin: 0 }}>Douleur</span><b style={{ color: 'var(--red-ink)', fontSize: 17 }}>{s.eva}/10</b></span>
-            <div className="eva-grid" role="radiogroup" aria-label="Douleur de 0 à 10">
-              {Array.from({ length: 11 }, (_, k) => <button key={k} role="radio" aria-checked={s.eva === k} onClick={() => update({ eva: k })}>{k}</button>)}
             </div>
           </div>
           <details className="plan-more">
@@ -97,6 +91,7 @@ export default function Plan({ s, update, go }: Props) {
       </div>
       <div className="plan-foot">
         <button className="btn primary pk-primary" disabled={!s.program.length} onClick={() => go('share')}><Icon name="link" />Remettre au patient<Icon name="next" /></button>
+        {s.visitId && <button className="btn ghost" onClick={() => go('terminer')}>Passer : terminer la séance</button>}
       </div>
       {view3d && <Suspense fallback={null}><ExerciseViewer ids={s.program.map((p) => p.exerciseId)} start={view3d} program={s.program} pathologyId={s.pathologyId} onClose={() => setView3d(null)} /></Suspense>}
     </div>

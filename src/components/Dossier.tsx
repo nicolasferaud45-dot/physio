@@ -6,6 +6,7 @@ import { exerciseById, pathologyById, PHASE_LABEL } from '../data/catalog'
 import { formatDose } from '../engine/plan'
 import { Icon } from './Icon'
 import type { Session } from '../state/session'
+import { currentVisit, fmtDate, patchVisit } from '../state/record'
 
 interface Props { s: Session; update: (p: Partial<Session> | ((s: Session) => Partial<Session>)) => void; onClose: () => void }
 type Pen = { id: string; label: string; color: string; dash?: number[]; width: number }
@@ -93,8 +94,14 @@ export function Dossier({ s, update, onClose }: Props) {
     const ro = new ResizeObserver(() => { const byW = (el.clientWidth - 24) / (RATIO.f + RATIO.b); setH(Math.max(260, Math.min(el.clientHeight - 16, byW, 760))) })
     ro.observe(el); return () => ro.disconnect()
   }, [tab])
-  const d = s.dossier ?? { notes: '' }
-  const save = (patch: Partial<NonNullable<Session['dossier']>>) => update((x) => ({ dossier: { notes: '', ...(x.dossier ?? {}), ...patch, savedAt: Date.now() } }))
+  // pendant une séance, dessins et note vont dans la séance ; sinon, notes générales du patient
+  const visit = currentVisit(s)
+  const d = visit ? { front: visit.sketch?.front, back: visit.sketch?.back, notes: visit.note ?? '' } : (s.dossier ?? { notes: '' })
+  const save = (patch: Partial<NonNullable<Session['dossier']>>) => update((x) => {
+    const v = currentVisit(x)
+    if (v) return patchVisit(x, (y) => ({ ...(patch.notes !== undefined ? { note: patch.notes } : {}), ...(patch.front !== undefined || patch.back !== undefined ? { sketch: { ...y.sketch, ...(patch.front !== undefined ? { front: patch.front } : {}), ...(patch.back !== undefined ? { back: patch.back } : {}) } } : {}) }))
+    return { dossier: { notes: '', ...(x.dossier ?? {}), ...patch, savedAt: Date.now() } }
+  })
   const patho = pathologyById(s.pathologyId)
 
   const dictate = () => {
@@ -168,7 +175,7 @@ export function Dossier({ s, update, onClose }: Props) {
     <div className="dossier" role="dialog" aria-label="Dossier praticien">
       <header className="dossier-top">
         <button className="icon-btn" aria-label="Fermer le dossier" onClick={onClose}><Icon name="x" /></button>
-        <div className="stack grow" style={{ gap: 0 }}><strong>Dossier · {s.patientLabel}</strong><span className="small muted row" style={{ gap: 4 }}><Icon name="lock" size={12} />Privé · jamais montré au patient</span></div>
+        <div className="stack grow" style={{ gap: 0 }}><strong>{visit ? `Séance du ${fmtDate(visit.at, true)}` : `Notes générales · ${s.patientLabel}`}</strong><span className="small muted row" style={{ gap: 4 }}><Icon name="lock" size={12} />Privé · jamais montré au patient</span></div>
       </header>
       <div className="dossier-tabs" role="tablist">
         {([['schema', 'Schéma'], ['captures', `Captures${s.captures.length ? ` (${s.captures.length})` : ''}`], ['notes', 'Notes']] as const).map(([id, l]) => (

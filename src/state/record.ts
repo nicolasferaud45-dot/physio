@@ -17,7 +17,21 @@ export interface Profile {
 }
 export interface DiagChange { pathologyId: string | null; side: 'D' | 'G' | null; at: number; reason?: string }
 export interface EpisodeEvent { at: number; kind: 'reeval' | 'termine' | 'recidive' | 'reprise'; text?: string }
-export interface Visit { id: string; at: number; eva: number; phase: Phase | null; note?: string; nEx?: number }
+export type Feeling = 'mieux' | 'pareil' | 'moins'
+export interface Visit {
+  id: string; at: number; eva: number; phase: Phase | null; note?: string; nEx?: number
+  /** séance ouverte (en cours) ou enregistrée au dossier ; auto = fermée automatiquement */
+  status?: 'open' | 'closed'; auto?: boolean
+  feeling?: Feeling; flagsOk?: boolean
+  /** ce qui a été fait en cabinet */
+  clinic?: string[]; clinicOther?: string; tried?: string[]
+  explained?: boolean; shared?: boolean
+  /** programme maison à la fin de la séance (identifiants d'exercices) */
+  programIds?: string[]
+  next?: '3j' | '1s' | '2s'
+  /** dessins et note pris pendant la séance (privés) */
+  sketch?: { front?: string; back?: string }
+}
 export interface Episode {
   id: string
   region: RegionId | null
@@ -50,12 +64,27 @@ export function newEpisode(s: Partial<Session> = {}, at = Date.now()): Episode {
 
 /** Ancien format (un patient = une pathologie) → un épisode. */
 export function ensureRecord(s: Session): Session {
-  if (s.episodes?.length && s.episodes.some((e) => e.id === s.episodeId)) return s
+  if (s.episodes?.length && s.episodes.some((e) => e.id === s.episodeId)) return closeStale(s)
   if (s.episodes?.length) return { ...s, episodeId: s.episodes[s.episodes.length - 1].id }
   const ep = newEpisode(s, s.createdAt)
   if (s.pathologyId) ep.visits.push({ id: rid(), at: s.savedAt, eva: s.eva, phase: s.phase, nEx: s.program.length })
   return { ...s, episodes: [ep], episodeId: ep.id }
 }
+
+/** Une séance oubliée (non terminée) est fermée automatiquement le lendemain avec ce qui a été saisi. */
+function closeStale(s: Session): Session {
+  const now = Date.now()
+  let changed = false
+  const episodes = s.episodes!.map((e) => {
+    if (!e.visits.some((v) => v.status === 'open' && !sameDay(v.at, now))) return e
+    changed = true
+    return { ...e, visits: e.visits.map((v) => (v.status === 'open' && !sameDay(v.at, now) ? { ...v, status: 'closed' as const, auto: true, programIds: v.programIds ?? e.program.map((p) => p.exerciseId) } : v)) }
+  })
+  if (!changed) return s
+  const open = episodes.some((e) => e.visits.some((v) => v.id === s.visitId && v.status === 'open'))
+  return { ...s, episodes, visitId: open ? s.visitId : undefined, screen: open || !SEANCE.includes(s.screen) ? s.screen : 'overview' }
+}
+export const SEANCE: Session['screen'][] = ['pathology', 'bilan', 'presentation', 'cabinet', 'plan', 'share', 'terminer']
 
 export const currentEpisode = (s: Session) => s.episodes?.find((e) => e.id === s.episodeId) ?? null
 
@@ -80,13 +109,10 @@ export function syncRecord(prev: Session, next: Session): Session {
     diagMode = undefined
   }
   ep.region = s.region; ep.side = s.side; ep.pathologyId = s.pathologyId; ep.phase = s.phase; ep.eva = s.eva; ep.program = s.program
-  // une séance par jour, créée dès qu'on travaille sur l'épisode (pas depuis la vue d'ensemble)
-  if (s.pathologyId && s.screen !== 'overview') {
-    const i = ep.visits.findIndex((v) => sameDay(v.at, now))
-    const v = { eva: s.eva, phase: s.phase, nEx: s.program.length }
-    if (i >= 0) ep.visits[i] = { ...ep.visits[i], ...v }
-    else ep.visits.push({ id: rid(), at: now, ...v })
-    if (ep.status === 'termine') { ep.status = 'en-cours'; ep.end = undefined; ep.events.push({ at: now, kind: 'reprise' }) }
+  // la séance en cours reçoit la douleur, la phase et le programme
+  if (s.visitId) {
+    const i = ep.visits.findIndex((v) => v.id === s.visitId && v.status === 'open')
+    if (i >= 0) ep.visits[i] = { ...ep.visits[i], eva: s.eva, phase: s.phase, nEx: s.program.length }
   }
   return { ...s, diagMode, episodes: s.episodes!.map((e) => (e.id === ep.id ? ep : e)) }
 }
@@ -129,3 +155,45 @@ export const REGION_COLOR: Record<RegionId, string> = {
 export const STATUS_LABEL: Record<EpisodeStatus, string> = { 'en-cours': 'En cours', termine: 'Terminé', recidive: 'Récidive' }
 export const fmtDate = (t: number, long = false) => new Date(t).toLocaleDateString('fr-CH', long ? { day: 'numeric', month: 'long', year: 'numeric' } : { day: 'numeric', month: 'short', year: '2-digit' })
 export const ageOf = (p?: Profile) => (p?.birthYear ? new Date().getFullYear() - p.birthYear : null)
+
+const lastClosed = (ep: Episode | null, exceptId?: string) => (ep ? [...ep.visits].filter((v) => v.id !== exceptId && v.status !== 'open').sort((a, b) => b.at - a.at)[0] ?? null : null)
+export const previousVisit = lastClosed
+export const currentVisit = (s: Session) => currentEpisode(s)?.visits.find((v) => v.id === s.visitId) ?? null
+
+/** Démarre (ou reprend) la séance du jour sur l'épisode courant. */
+export function startVisit(s: Session): Partial<Session> {
+  const ep = currentEpisode(s)
+  if (!ep) return {}
+  const now = Date.now()
+  const open = ep.visits.find((v) => v.status === 'open')
+  if (open) return { visitId: open.id, screen: ep.pathologyId ? 'bilan' : 'pathology' }
+  const v: Visit = { id: rid(), at: now, eva: s.eva, phase: s.phase, nEx: s.program.length, status: 'open', clinic: lastClosed(ep)?.clinic ?? [] }
+  const reopen = ep.status === 'termine'
+  const episodes = (s.episodes ?? []).map((e) => (e.id === ep.id ? { ...e, visits: [...e.visits, v], ...(reopen ? { status: 'en-cours' as const, end: undefined, events: [...e.events, { at: now, kind: 'reprise' as const }] } : {}) } : e))
+  return { episodes, visitId: v.id, screen: ep.pathologyId ? 'bilan' : 'pathology', done: false }
+}
+export function patchVisit(s: Session, patch: Partial<Visit> | ((v: Visit) => Partial<Visit>)): Partial<Session> {
+  const ep = currentEpisode(s)
+  if (!ep || !s.visitId) return {}
+  return patchEpisode(s, ep.id, (e) => ({ visits: e.visits.map((v) => (v.id === s.visitId ? { ...v, ...(typeof patch === 'function' ? patch(v) : patch) } : v)) }))
+}
+/** « Enregistrer au dossier » : la séance est close, on revient au dossier. */
+export function closeVisit(s: Session): Partial<Session> {
+  const p = patchVisit(s, (v) => ({ status: 'closed', eva: s.eva, phase: s.phase, nEx: s.program.length, programIds: s.program.map((x) => x.exerciseId), at: v.at }))
+  return { ...p, visitId: undefined, screen: 'overview' }
+}
+/** Étapes de la séance : la première séance d'un épisode commence par la pathologie. */
+export function seanceSteps(s: Session): { id: Session['screen']; label: string; facing?: boolean }[] {
+  const ep = currentEpisode(s)
+  const first = !ep?.pathologyId || !ep.visits.some((v) => v.status === 'closed')
+  return [
+    ...(first ? [{ id: 'pathology' as const, label: 'Pathologie' }] : []),
+    { id: 'bilan', label: 'Bilan' },
+    { id: 'presentation', label: 'Expliquer', facing: true },
+    { id: 'cabinet', label: 'En cabinet' },
+    { id: 'plan', label: 'À la maison', facing: true },
+    { id: 'terminer', label: 'Terminer' },
+  ]
+}
+export const NEXT_LABEL: Record<NonNullable<Visit['next']>, string> = { '3j': 'dans 3 jours', '1s': 'dans 1 semaine', '2s': 'dans 2 semaines' }
+export const FEELING_LABEL: Record<Feeling, string> = { mieux: 'Mieux', pareil: 'Pareil', moins: 'Moins bien' }

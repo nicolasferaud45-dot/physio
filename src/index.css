@@ -828,3 +828,80 @@ i.ok { background: #2E7D5B; } i.bad { background: #C2412D; }
   .ov-actions { grid-template-columns: 1fr; }
   .ov-actions .btn { justify-content: flex-start; padding: 0 14px; }
 }
+
+/* ---------------------------------------------------------------- v0.8 séance guidée */
+.good { color: var(--green); }
+.bad { color: var(--red-ink); }
+.tag.amber { background: #FFF4DE; color: #7A5200; }
+.bar1.seance-bar { height: auto; flex-direction: column; align-items: stretch; gap: 8px; padding: 8px 12px 10px 4px; }
+.seance-top { display: flex; align-items: center; gap: 8px; }
+.seance-title { font-size: 16.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+.seance-steps { display: grid; gap: 6px; padding-left: 8px; }
+.seance-steps button { min-height: 42px; border-radius: 12px; border: 1px solid var(--line-strong); background: #fff; color: var(--ink-2); font: inherit; font-weight: 600; font-size: 14px; padding: 0 6px; display: flex; align-items: center; justify-content: center; }
+.seance-steps button i { display: none; }
+.seance-steps button.facing { background: var(--red-soft); border-color: #F2C8BC; color: var(--red-ink); }
+.seance-steps button.done { background: #E3EEF7; border-color: transparent; color: var(--blue-dark); }
+.seance-steps button[aria-current="step"] { background: var(--blue); border-color: var(--blue); color: #fff; }
+.seance-steps button:disabled { opacity: .45; }
+@media (max-width: 700px) {
+  .seance-steps { gap: 4px; padding: 0 6px; }
+  .seance-steps button { min-height: 22px; padding: 0; border: 0; background: none !important; }
+  .seance-steps button span { display: none; }
+  .seance-steps button i { display: block; width: 100%; height: 8px; border-radius: 4px; background: #D5DEE5; }
+  .seance-steps button.facing i { background: #F2C8BC; }
+  .seance-steps button.done i { background: var(--blue); }
+  .seance-steps button[aria-current="step"] i { background: var(--ink); }
+  .seance-title { font-size: 15px; }
+}
+.pen-fab { position: fixed; left: 20px; bottom: 22px; z-index: 40; width: 60px; height: 60px; border-radius: 30px; border: 0; background: var(--ink); color: #fff; display: flex; align-items: center; justify-content: center; box-shadow: 0 8px 20px rgba(19,35,47,.25); }
+@media (max-width: 700px) { .pen-fab { left: auto; right: 14px; bottom: 96px; width: 56px; height: 56px; } }
+.seance { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 16px; max-width: 1180px; margin: 0 auto; align-items: start; }
+.seance.one { grid-template-columns: minmax(0, 820px); justify-content: center; }
+.seance.two { grid-template-columns: 1fr 1fr; }
+@media (max-width: 899px) { .seance, .seance.two { grid-template-columns: 1fr; } }
+.seance-main { display: flex; flex-direction: column; gap: 16px; padding: 20px; }
+.seance-h { margin: 0; font-family: var(--font-display); font-size: 23px; }
+.seance-side { display: flex; flex-direction: column; gap: 10px; }
+.eva-grid.big button { min-height: 50px; border-radius: 12px; font-size: 17px; }
+.eva-grid button.was { background: #fff; border: 2px dashed var(--line-strong); }
+.eva-grid button[aria-checked="true"] { background: var(--ink); color: #fff; }
+.seance-feel { display: flex; gap: 8px; }
+.seance-feel button { flex: 1; min-height: 50px; border-radius: 14px; border: 1px solid var(--line-strong); background: #fff; font: inherit; font-weight: 600; font-size: 15px; color: var(--ink); }
+.seance-feel button[aria-pressed="true"] { border-color: transparent; background: var(--blue-soft); color: var(--blue-dark); font-weight: 700; }
+.seance-feel button.f-mieux[aria-pressed="true"] { background: var(--green-soft); color: var(--green-ink); }
+.seance-feel button.f-moins[aria-pressed="true"] { background: var(--red-soft); color: var(--red-ink); }
+.seance-home { display: flex; gap: 10px; align-items: center; background: var(--surface-2); border-radius: 14px; padding: 12px 14px; font-size: 14.5px; color: var(--green); }
+.seance-home .grow { color: var(--ink); }
+.seance-flags { display: flex; gap: 10px; align-items: flex-start; border: 1px solid var(--line); border-radius: 14px; padding: 12px 14px; font-size: 14.5px; }
+.seance-flags ul { margin: 6px 0 0; padding-left: 18px; }
+.seance-flags .btn { min-height: 42px; }
+.seance-flags .btn.ok { background: var(--green-soft); border-color: transparent; color: var(--green-ink); }
+.sk-thumb { position: relative; border: 1px solid var(--line); border-radius: 12px; background: #F8FAFB; overflow: hidden; }
+.sk-thumb img { position: absolute; inset: 4px; width: calc(100% - 8px); height: calc(100% - 8px); object-fit: contain; }
+.sk-thumb img:first-child { opacity: .8; }
+.sk-add { border-radius: 12px; border: 1.5px dashed var(--line-strong); background: #fff; color: var(--ink-2); font: inherit; font-size: 13px; font-weight: 600; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; }
+.seance-ex { display: flex; gap: 8px; align-items: center; }
+.seance-ex-main { flex: 1; display: flex; gap: 12px; align-items: center; text-align: left; font: inherit; color: inherit; background: #fff; border: 1px solid var(--line); border-radius: 14px; padding: 10px 12px; }
+.seance-ex-main[aria-pressed="true"] { border-color: var(--green); }
+.seance-check { width: 26px; height: 26px; border-radius: 8px; border: 2px solid var(--line-strong); display: flex; align-items: center; justify-content: center; flex: 0 0 auto; }
+.seance-check.on { background: var(--green); border-color: var(--green); color: #fff; }
+.sum-row { display: grid; grid-template-columns: 110px 1fr; gap: 12px; text-align: left; font: inherit; font-size: 15px; color: var(--ink); background: #fff; border: 1px solid var(--line); border-radius: 14px; padding: 12px 14px; }
+.sum-row > span:first-child { font-size: 12px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); padding-top: 2px; }
+.seance-note { position: relative; display: flex; }
+.seance-note textarea { flex: 1; min-height: 130px; border: 1px solid var(--line-strong); border-radius: 14px; padding: 12px 60px 12px 14px; font: inherit; font-size: 15px; color: var(--ink); resize: vertical; }
+.seance-note .icon-btn { position: absolute; right: 8px; top: 8px; width: 44px; height: 44px; }
+.seance-note .icon-btn.rec { background: var(--red); color: #fff; border-color: var(--red); }
+.ov-before { display: flex; flex-direction: column; gap: 12px; padding: 18px; border: 2px solid var(--blue); }
+.ov-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+.ov-stats > div { background: var(--surface-2); border-radius: 14px; padding: 10px 12px; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.ov-stats > div.warn { background: #FFF4DE; color: #7A5200; }
+.ov-stats span { font-size: 12px; color: var(--muted); }
+.ov-stats .warn span { color: #7A5200; }
+.ov-stats b { font-size: 19px; }
+.ov-stats small { font-size: 12.5px; color: var(--muted); }
+.ov-stats small.good { color: var(--green); } .ov-stats small.bad { color: var(--red-ink); }
+@media (max-width: 600px) { .ov-stats { grid-template-columns: 1fr 1fr; } }
+.ov-lastnote { margin: 0; font-size: 14.5px; color: var(--ink-2); }
+.ov-visits li.open { border-color: var(--blue); }
+.seance-bar ~ .content { padding-bottom: 110px; }
+@media (max-width: 700px) { .pen-fab { right: 12px; bottom: 16px; width: 52px; height: 52px; } }

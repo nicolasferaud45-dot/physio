@@ -209,7 +209,9 @@ export default function PathologyStep({ s, update, go }: Props) {
         </details>
       )}
       <div className="grow" />
-      <button className="btn primary pk-primary" onClick={() => go('presentation')}><Icon name="screen" />Montrer au patient<Icon name="next" /></button>
+      {s.visitId
+        ? <button className="btn primary pk-primary" onClick={() => go('bilan')}>Suivant : bilan<Icon name="next" /></button>
+        : <button className="btn primary pk-primary" onClick={() => update({ screen: 'overview', diagMode: undefined })}><Icon name="check" />Enregistrer au dossier</button>}
     </div>
   )
 
