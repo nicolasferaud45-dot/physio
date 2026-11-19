@@ -278,7 +278,8 @@ function build(an: Anatomy, J: JointDef, pv: PathoVisual | null, pathologyId: st
   }
 
   // --- ligaments et tendons procéduraux (tube aplati, mis à jour chaque image)
-  const unit = new THREE.CylinderGeometry(1, 1, 1, 20, 6); unit.translate(0, 0.5, 0); disposables.push(unit)
+  // profil en fuseau : insertions larges et arrondies, pas de bords francs (sinon on voit une plaque)
+  const unit = new THREE.LatheGeometry([[0, 0], [0.5, 0.004], [0.8, 0.025], [0.95, 0.08], [1, 0.2], [0.9, 0.5], [1, 0.8], [0.95, 0.92], [0.8, 0.975], [0.5, 0.996], [0, 1]].map(([x, y]) => new THREE.Vector2(x, y)), 24); disposables.push(unit)
   const stub = new THREE.CylinderGeometry(1, 0.55, 1, 14, 4); stub.translate(0, 0.5, 0)
   { // effilochage
     const p = stub.getAttribute('position') as THREE.BufferAttribute

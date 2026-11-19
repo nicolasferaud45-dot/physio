@@ -65,8 +65,10 @@ export interface MaterialSet {
 export function makeMaterials(xray = false): MaterialSet {
   const bone = new THREE.MeshPhysicalMaterial({ color: '#ffffff', vertexColors: true, roughness: 0.62, clearcoat: 0.18, clearcoatRoughness: 0.5, sheen: 0.25, sheenColor: new THREE.Color('#fff4dc') })
   const muscle = new THREE.MeshPhysicalMaterial({ color: '#ffffff', vertexColors: true, map: fiberTex(), bumpMap: fiberTex(), bumpScale: 1.2, roughness: 0.48, sheen: 0.6, sheenColor: new THREE.Color('#ffb4a2'), sheenRoughness: 0.4, clearcoat: 0.25, clearcoatRoughness: 0.35 })
-  const tendon = new THREE.MeshPhysicalMaterial({ color: COLORS.tendon, roughness: 0.3, clearcoat: 0.8, clearcoatRoughness: 0.2, sheen: 0.8, sheenColor: new THREE.Color('#dfe9ff') })
-  const ligament = new THREE.MeshPhysicalMaterial({ color: '#ffffff', vertexColors: false, roughness: 0.32, clearcoat: 0.7, transparent: true, opacity: 0.92, sheen: 0.6, sheenColor: new THREE.Color('#e6f0ff') })
+  const lf = fiberTex().clone(); lf.repeat.set(3, 1); lf.needsUpdate = true
+  // tendons/ligaments : fibres longitudinales visibles (sinon ils ressemblent à des plaques lisses)
+  const tendon = new THREE.MeshPhysicalMaterial({ color: COLORS.tendon, map: lf, bumpMap: lf, bumpScale: 1.6, roughness: 0.38, clearcoat: 0.8, clearcoatRoughness: 0.2, sheen: 0.8, sheenColor: new THREE.Color('#dfe9ff') })
+  const ligament = new THREE.MeshPhysicalMaterial({ color: '#ffffff', vertexColors: false, map: lf, bumpMap: lf, bumpScale: 1.6, roughness: 0.4, clearcoat: 0.7, transparent: true, opacity: 0.92, sheen: 0.6, sheenColor: new THREE.Color('#e6f0ff') })
   const cartilage = new THREE.MeshPhysicalMaterial({ color: COLORS.cartilage, roughness: 0.18, clearcoat: 1, clearcoatRoughness: 0.08, transparent: true, opacity: 0.95 })
   const skin = rim(new THREE.MeshPhysicalMaterial({ color: COLORS.skin, roughness: 0.55, transparent: true, opacity: 0.15, depthWrite: false, side: THREE.FrontSide, sheen: 0.5, sheenColor: new THREE.Color('#ffd9c4') }), 1.6, 0.35)
   const metal = new THREE.MeshPhysicalMaterial({ color: COLORS.metal, metalness: 1, roughness: 0.22, clearcoat: 0.5 })

@@ -39,7 +39,7 @@ export default function Plan({ s, update, go }: Props) {
   return (
     <div className="plan">
       <div className="plan-scroll">
-        {patho && <div className="plan-title"><span className="pk-eyebrow" style={{ margin: 0 }}>{patho.label}{s.side ? ` · ${s.side === 'D' ? 'droite' : 'gauche'}` : ''}</span><h1>{lay(patho.id, patho.label)}</h1></div>}
+        {patho && <div className="plan-title"><span className="pk-eyebrow" style={{ margin: 0 }}>{patho.label}{s.side ? ` · ${s.side === 'D' ? 'droite' : 'gauche'}` : ''}</span><div className="row" style={{ alignItems: 'flex-end', gap: 10 }}><h1 className="grow">{lay(patho.id, patho.label)}</h1><button className="btn plan-3d" onClick={() => go('presentation')}><Icon name="screen" />Montrer en 3D</button></div></div>}
         <section className="card stack" style={{ gap: 14 }}>
           <div className="stack" style={{ gap: 6 }}>
             <span className="pk-eyebrow" style={{ margin: 0 }}>Phase</span>

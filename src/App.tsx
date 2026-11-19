@@ -81,7 +81,7 @@ function PractitionerApp() {
           <nav className="bar1-steps" aria-label="Étapes">
             {STEPS.map((st, i) => (
               <button key={st.id} aria-current={i === idx ? 'step' : undefined} className={i < idx ? 'done' : ''} disabled={!canGo(i)} onClick={() => go(st.id)}>
-                <i />{<span>{i + 1} · {st.label}</span>}
+                <i /><span><em>{i + 1} · </em>{st.label}</span>
               </button>
             ))}
           </nav>

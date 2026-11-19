@@ -78,7 +78,7 @@ export const KNEE: JointDef = {
   ligaments: [
     { id: 'lca', label: 'Ligament croisé antérieur', simple: 'Ligament croisé de devant', a: { seg: 'thigh', p: [-0.088, 0.427, 0.052] }, b: { seg: 'leg', p: [-0.072, PLATEAU_Y, 0.078] }, width: 0.008 },
     { id: 'lcp', label: 'Ligament croisé postérieur', simple: 'Ligament croisé de derrière', a: { seg: 'thigh', p: [-0.064, 0.43, 0.072] }, b: { seg: 'leg', p: [-0.078, 0.393, 0.046] }, width: 0.009 },
-    { id: 'lli', label: 'Ligament collatéral médial', simple: 'Ligament de l\'intérieur du genou', a: { seg: 'thigh', p: [-0.035, 0.445, 0.064] }, b: { seg: 'leg', p: [-0.046, 0.335, 0.074] }, width: 0.012, thick: 0.002 },
+    { id: 'lli', label: 'Ligament collatéral médial', simple: 'Ligament de l\'intérieur du genou', a: { seg: 'thigh', p: [-0.035, 0.445, 0.064] }, b: { seg: 'leg', p: [-0.046, 0.335, 0.074] }, width: 0.011, thick: 0.0035 },
     { id: 'lle', label: 'Ligament collatéral latéral', simple: 'Ligament de l\'extérieur du genou', a: { seg: 'thigh', p: [-0.116, 0.443, 0.062] }, b: { seg: 'leg', p: [-0.122, 0.385, 0.058] }, width: 0.006 },
     { id: 'tendon-rotulien', label: 'Tendon rotulien', simple: 'Tendon sous la rotule', a: { seg: 'patella', p: [-0.083, 0.401, 0.108] }, b: { seg: 'leg', p: [-0.078, 0.352, 0.103] }, width: 0.022, thick: 0.005, kind: 'tendon' },
     { id: 'tendon-quadricipital', label: 'Tendon quadricipital', simple: 'Tendon au-dessus de la rotule', a: { seg: 'thigh', p: [-0.085, 0.475, 0.1] }, b: { seg: 'patella', p: [-0.084, 0.434, 0.11] }, width: 0.03, thick: 0.006, kind: 'tendon' },

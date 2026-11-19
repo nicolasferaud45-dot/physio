@@ -61,7 +61,7 @@ export const SHOULDER: JointDef = {
     { bone: 'right scapula', test: near(GLENOID, 0.02) },
   ],
   ligaments: [
-    { id: 'coraco-acromial', label: 'Ligament coraco-acromial', simple: 'Toit de l\'épaule', a: { seg: 'scap', p: [-0.128, 1.335, 0.112] }, b: { seg: 'scap', p: [-0.158, 1.354, 0.088] }, width: 0.014, thick: 0.002 },
+    { id: 'coraco-acromial', label: 'Ligament coraco-acromial', simple: 'Toit de l\'épaule', a: { seg: 'scap', p: [-0.128, 1.335, 0.112] }, b: { seg: 'scap', p: [-0.158, 1.354, 0.088] }, width: 0.012, thick: 0.004 },
     { id: 'tendon-supra', label: 'Tendon du supra-épineux', simple: 'Tendon qui frotte', a: { seg: 'scap', p: [-0.135, 1.345, 0.06] }, b: { seg: 'arm', p: [-0.183, 1.338, 0.075] }, width: 0.016, thick: 0.004, kind: 'tendon' },
   ],
   customs: [
