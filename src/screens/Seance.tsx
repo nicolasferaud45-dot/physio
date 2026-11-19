@@ -9,6 +9,7 @@ import {
   closeVisit, currentEpisode, currentVisit, fmtDate, FEELING_LABEL, NEXT_LABEL, patchVisit, previousVisit, rxLeft, type Feeling, type Visit,
 } from '../state/record'
 
+import { ExercisePic } from './Exercises'
 const ExerciseViewer = lazy(() => import('./ExerciseViewer'))
 type Update = (p: Partial<Session> | ((s: Session) => Partial<Session>)) => void
 interface Props { s: Session; update: Update; go: (sc: Screen) => void; onPen: () => void }
@@ -121,6 +122,7 @@ export function Cabinet({ s, update, go }: Props) {
                 <div key={p.exerciseId} className="seance-ex">
                   <button className="seance-ex-main" aria-pressed={tried.includes(e.id)} onClick={() => toggleTried(e.id)}>
                     <span className={'seance-check' + (tried.includes(e.id) ? ' on' : '')}>{tried.includes(e.id) && <Icon name="check" size={16} stroke={3} />}</span>
+                    <ExercisePic e={e} size={56} />
                     <span className="stack grow" style={{ gap: 1 }}><strong>{e.name}</strong><span className="small muted">{tried.includes(e.id) ? 'Fait en cabinet' : 'Toucher si fait en cabinet'}</span></span>
                   </button>
                   <button className="icon-btn" aria-label={`Voir ${e.name} en 3D`} onClick={() => setView3d(e.id)}><Icon name="play" size={18} /></button>
