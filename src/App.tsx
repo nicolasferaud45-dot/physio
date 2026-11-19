@@ -5,6 +5,7 @@ import Remise from './screens/Share'
 import PatientsHome from './screens/PatientsHome'
 import PathologyStep from './screens/PathologyStep'
 import Plan from './screens/Plan'
+import Overview from './screens/Overview'
 import { Dossier } from './components/Dossier'
 import { lay } from './data/lay'
 import PatientHome from './screens/PatientHome'
@@ -65,7 +66,13 @@ function PractitionerApp() {
     return <Presentation s={{ ...s, pathologyId: s.pathologyId ?? 'conflit' }} update={update} onExit={() => update({ screen: 'plan' })} />
   }
   if (s.screen === 'share') {
-    return <Remise s={s} update={update} onBack={() => update({ screen: 'plan' })} onFinish={() => { update({ done: true }); P.open(null) }} />
+    return <Remise s={s} update={update} onBack={() => update({ screen: 'plan' })} onFinish={() => update({ done: true, screen: 'overview' })} />
+  }
+  if (s.screen === 'overview') {
+    return <>
+      <Overview s={s} update={update} go={go} onPatients={() => P.open(null)} onNotes={() => setDossier(true)} />
+      {dossier && <Dossier s={s} update={update} onClose={() => setDossier(false)} />}
+    </>
   }
   const idx = STEPS.findIndex((x) => x.id === s.screen)
   const canGo = (i: number) => i === 0 || !!s.pathologyId
@@ -73,7 +80,7 @@ function PractitionerApp() {
   return (
     <div className="shell">
       <header className="bar1 no-print">
-        <button className="icon-btn ghost" onClick={() => P.open(null)} aria-label="Mes patients"><Icon name="back" /></button>
+        <button className="icon-btn ghost" onClick={() => update({ screen: 'overview', diagMode: undefined })} aria-label="Dossier du patient"><Icon name="back" /></button>
         <div className="bar1-who">
           {editName
             ? <input autoFocus className="patient-input" value={s.patientLabel} onChange={(e) => update({ patientLabel: e.target.value })} onBlur={() => setEditName(false)} onKeyDown={(e) => { if (e.key === 'Enter') setEditName(false) }} aria-label="Nom ou pseudonyme du patient" />
@@ -87,7 +94,7 @@ function PractitionerApp() {
           </nav>
         </div>
         <span className="bar1-saved" title="Enregistré automatiquement"><Icon name="check" size={16} stroke={2.4} /></span>
-        <button className="bar1-dossier" onClick={() => setDossier(true)} aria-label="Dossier : notes et dessins"><Icon name="pen" size={18} /><span>Dossier</span></button>
+        <button className="bar1-dossier" onClick={() => setDossier(true)} aria-label="Notes et dessins"><Icon name="pen" size={18} /><span>Notes</span></button>
       </header>
       <main className={'content step-' + s.screen}>
         {s.screen === 'pathology' && <PathologyStep s={s} update={update} go={go} />}

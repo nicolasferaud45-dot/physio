@@ -48,6 +48,17 @@ Les vues 3D utilisent **BodyParts3D** (modèles issus de scanners, © The Databa
 - **Exercices** : les 58 animations pilotent le corps réel (squelette + muscles colorés par rôle).
 - Démonstrateur du cahier des charges : `#anat-genou` (ou `#anat-epaule`, `#anat-lombaire`…).
 
+## Dossier patient (v0.7)
+
+Un patient a un **profil** (âge, côté dominant, métier, sport, antécédents, traitements, précautions en rouge), des **épisodes de soin** (une pathologie + un côté, statut en cours / terminé / récidive, motif, ordonnance avec séances restantes) et des **séances** (une par jour, créée dès qu'on travaille sur l'épisode : douleur, phase, nombre d'exercices, note).
+
+- Ouvrir un patient arrive sur son **dossier** : profil, « Séance du jour », « Nouvelle douleur », frise des épisodes avec la courbe de douleur (horizontale sur tablette, verticale sur téléphone), détail de l'épisode choisi.
+- **Modifier la pathologie** : *corriger* (erreur de saisie, remplacée) ou *réévaluer* (nouvelle information : l'ancienne reste barrée et datée avec le motif).
+- Export **PDF du dossier complet**.
+- La flèche retour des étapes ramène au dossier. Les anciens patients sont convertis en un épisode.
+- Code : `src/state/record.ts` (modèle, synchronisation), `src/screens/Overview.tsx`.
+- Stockage toujours local à l'appareil ; questionnaires (QuickDASH, KOOS, Oswestry, NDI) à venir.
+
 ## Catalogue
 
 - **31 pathologies** fréquentes sur 8 régions (épaule, coude, poignet/main, cervical, lombaire, hanche/cuisse, genou, cheville/pied) : explications simples et techniques, normal vs pathologie, drapeaux rouges, 3 phases, points clés, sources (`data/pathologies.ts`).

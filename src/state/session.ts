@@ -2,9 +2,10 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import type { Equipment, Phase, RegionId } from '../data/catalog'
 import type { Prescription } from '../engine/plan'
 import type { AiAnalysis } from '../engine/claude'
+import { ensureRecord, newEpisode, syncRecord, type Episode, type Profile } from './record'
 
 export type PresentView = 'compare' | 'normal' | 'patho'
-export type Screen = 'pathology' | 'presentation' | 'plan' | 'share'
+export type Screen = 'overview' | 'pathology' | 'presentation' | 'plan' | 'share'
 
 export interface Session {
   id: string
@@ -32,6 +33,12 @@ export interface Session {
   captures: string[]
   /** dossier praticien (privé) */
   dossier?: { front?: string; back?: string; notes: string; savedAt?: number }
+  /** dossier complet : profil, épisodes de soin et séances */
+  profile?: Profile
+  episodes?: Episode[]
+  episodeId?: string
+  /** changement de pathologie demandé depuis le dossier */
+  diagMode?: { kind: 'correct' | 'reeval'; reason?: string }
   savedAt: number
 }
 
@@ -56,7 +63,7 @@ function migrate(x: Partial<Session>): Session {
   const sc = s.screen as string
   if (sc === 'home' || sc === 'context' || sc === 'situation') s.screen = 'pathology'
   if (sc === 'exercises') s.screen = 'plan'
-  return s
+  return ensureRecord(s)
 }
 function loadAll(): Session[] {
   try {
@@ -85,10 +92,11 @@ export function usePatients() {
   useEffect(() => { try { if (currentId) sessionStorage.setItem('physio.current', currentId); else sessionStorage.removeItem('physio.current') } catch { /* ignore */ } }, [currentId])
   const current = all.find((x) => x.id === currentId) ?? null
   const update = useCallback((patch: Partial<Session> | ((s: Session) => Partial<Session>)) => {
-    setAll((list) => list.map((x) => (x.id === currentId ? { ...x, ...(typeof patch === 'function' ? patch(x) : patch), savedAt: Date.now() } : x)))
+    setAll((list) => list.map((x) => (x.id === currentId ? syncRecord(x, { ...x, ...(typeof patch === 'function' ? patch(x) : patch), savedAt: Date.now() }) : x)))
   }, [currentId])
   const create = useCallback((label?: string) => {
     const n = emptySession()
+    const ep = newEpisode({}); n.episodes = [ep]; n.episodeId = ep.id
     setAll((list) => {
       if (!label) { let k = list.length + 1; while (list.some((x) => x.patientLabel === `Patient ${k}`)) k++; n.patientLabel = `Patient ${k}` } else n.patientLabel = label
       return [n, ...list]
@@ -97,8 +105,8 @@ export function usePatients() {
   }, [])
   const remove = useCallback((id: string) => setAll((list) => list.filter((x) => x.id !== id)), [])
   const open = useCallback((id: string | null) => {
-    // Un patient rouvert repart côté praticien (jamais directement sur un écran tourné vers le patient)
-    if (id) setAll((list) => list.map((x) => (x.id === id && (x.screen === 'presentation' || x.screen === 'share') ? { ...x, screen: x.pathologyId ? 'plan' : 'pathology' } : x)))
+    // Un patient rouvert arrive sur son dossier (jamais directement sur un écran tourné vers le patient)
+    if (id) setAll((list) => list.map((x) => (x.id === id ? { ...x, screen: x.pathologyId || (x.episodes?.length ?? 0) > 1 ? 'overview' : 'pathology', diagMode: undefined } : x)))
     setCurrentId(id)
   }, [])
   return { all, current, update, create, remove, open }

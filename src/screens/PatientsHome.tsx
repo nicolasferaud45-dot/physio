@@ -4,7 +4,7 @@ import { Icon } from '../components/Icon'
 import { pathologyById, regionLabel } from '../data/catalog'
 import { loadLog, type Screen, type Session } from '../state/session'
 
-const STEP_LABEL: Record<Screen, string> = { pathology: 'Pathologie', presentation: 'Montrer', plan: 'Plan', share: 'Remise' }
+const STEP_LABEL: Record<Screen, string> = { overview: 'Dossier', pathology: 'Pathologie', presentation: 'Montrer', plan: 'Plan', share: 'Remise' }
 
 /** Accueil praticien : les patients suivis sur cette tablette et leurs retours. */
 export default function PatientsHome({ patients, onOpen, onCreate, onRemove }: { patients: Session[]; onOpen: (id: string) => void; onCreate: () => void; onRemove: (id: string) => void }) {
@@ -39,6 +39,7 @@ export default function PatientsHome({ patients, onOpen, onCreate, onRemove }: {
                   <strong style={{ fontSize: 17 }}>{p.patientLabel}</strong>
                   <span className="small muted">{patho ? lay(patho.id, patho.label) : p.region ? regionLabel(p.region) : 'Pathologie à choisir'}{p.side ? ` · ${p.side === 'D' ? 'droite' : 'gauche'}` : ''} · {new Date(p.savedAt).toLocaleDateString('fr-CH', { day: 'numeric', month: 'short' })}</span>
                   <div className="row wrap" style={{ gap: 8 }}>
+                    {(p.episodes?.length ?? 0) > 1 && <span className="tag grey">{p.episodes!.length} épisodes</span>}
                     {p.done ? <span className="tag green">Programme remis · {p.program.length} exercice{p.program.length > 1 ? 's' : ''}</span>
                       : <span className="tag blue">À continuer · {STEP_LABEL[p.screen]}</span>}
                     {last && <span className={'feedback' + ((last.pain ?? 0) > Math.max(...p.program.map((x) => x.maxPain), 3) ? ' bad' : '')}>{log.length} séance{log.length > 1 ? 's' : ''} faite{log.length > 1 ? 's' : ''}{last.pain !== null ? ` · douleur ${last.pain}/10` : ''}</span>}

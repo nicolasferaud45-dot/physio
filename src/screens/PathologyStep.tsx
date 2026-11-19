@@ -47,7 +47,7 @@ export default function PathologyStep({ s, update, go }: Props) {
   const [region, setRegion] = useState<RegionId | null>(s.region)
   const [side, setSide] = useState<'D' | 'G' | null>(s.side)
   // étape interne : 'body' (toucher) → 'list' (choisir) → 'confirm'
-  const [stage, setStage] = useState<'body' | 'list' | 'confirm'>(s.pathologyId ? 'confirm' : 'body')
+  const [stage, setStage] = useState<'body' | 'list' | 'confirm'>(s.pathologyId && !s.diagMode ? 'confirm' : 'body')
   const bodyBox = useRef<HTMLDivElement>(null)
   const bodyH = useBodyHeight(bodyBox)
   const patho = pathologyById(s.pathologyId)
@@ -213,11 +213,20 @@ export default function PathologyStep({ s, update, go }: Props) {
     </div>
   )
 
+  // bandeau quand on change la pathologie depuis le dossier
+  const banner = s.diagMode && (
+    <div className={'pk-diag' + (s.diagMode.kind === 'reeval' ? ' reeval' : '')}>
+      <Icon name={s.diagMode.kind === 'reeval' ? 'refresh' : 'pen'} size={18} />
+      <span className="grow">{s.diagMode.kind === 'reeval' ? <>Réévaluation : <b>{patho?.label}</b> restera dans l'historique.</> : <>Correction : <b>{patho?.label}</b> sera remplacée.</>}</span>
+      <button className="btn ghost" style={{ minHeight: 36 }} onClick={() => update({ diagMode: undefined, screen: 'overview' })}>Annuler</button>
+    </div>
+  )
+
   // ------------------------------------------------ mise en page
   if (wide) {
     return (
       <div className="pk wide">
-        <div className="pk-left">{mode === 'guide' ? body : rapide}</div>
+        <div className="pk-left">{banner}{mode === 'guide' ? body : rapide}</div>
         <div className="pk-right">
           {stage === 'confirm' && patho ? confirm
             : region && mode === 'guide' ? listPanel
@@ -228,6 +237,7 @@ export default function PathologyStep({ s, update, go }: Props) {
   }
   return (
     <div className="pk narrow">
+      {banner}
       {stage === 'confirm' && patho ? confirm
         : mode === 'rapide' ? rapide
         : <>
