@@ -1,6 +1,6 @@
 // Épaule droite : glénohumérale + rythme scapulo-huméral (1/3 omoplate, 2/3 humérus).
 import type { JointDef, V3 } from '../types'
-import { ellipsoid, near, ring } from './helpers'
+import { ellipsoid, near, ring, skinLines } from './helpers'
 
 const GH: V3 = [-0.16, 1.322, 0.07]
 const SC: V3 = [-0.02, 1.352, 0.125]
@@ -8,6 +8,7 @@ const GLENOID: V3 = [-0.142, 1.321, 0.069]
 const ACROMION: V3 = [-0.162, 1.353, 0.072]
 
 export const SHOULDER: JointDef = {
+  skinLines: skinLines({ rclav: 'scap', rbras: 'arm', ravbras: 'arm', rmain: 'arm' }),
   id: 'epaule',
   label: 'Épaule',
   dofs: [

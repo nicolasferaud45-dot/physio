@@ -1,12 +1,13 @@
 // Hanche et cheville droites.
 import type { JointDef, V3 } from '../types'
-import { band, ellipsoid, near, ring } from './helpers'
+import { band, ellipsoid, near, ring, skinLines } from './helpers'
 
 // ------------------------------------------------------------------ HANCHE
 const FH: V3 = [-0.083, 0.812, 0.09] // centre de la tête fémorale
 const TROCH: V3 = [-0.142, 0.79, 0.08] // grand trochanter
 
 export const HIP: JointDef = {
+  skinLines: skinLines({ rcuisse: 'thigh', rjambe: 'thigh', rpied: 'thigh' }),
   id: 'hanche',
   label: 'Hanche',
   dofs: [
@@ -111,6 +112,7 @@ const ANK: V3 = [-0.075, 0.057, 0.066]
 const SUBT: V3 = [-0.077, 0.035, 0.06]
 
 export const ANKLE: JointDef = {
+  skinLines: skinLines({ rpied: 'foot' }),
   id: 'cheville',
   label: 'Cheville',
   dofs: [

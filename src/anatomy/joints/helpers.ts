@@ -35,3 +35,27 @@ export function band(points: V3[], width: number, thick: number) {
   }
   g.computeVertexNormals(); return g
 }
+
+/** Lignes osseuses du corps entier pour répartir la peau (chaque point suit l'os le plus proche). */
+export type SkinLine = { seg: string; a: V3; b: V3; key: string }
+const BASE: Omit<SkinLine, 'seg'>[] = [
+  { key: 'pelvis', a: [-0.1, 0.84, 0.08], b: [0.1, 0.84, 0.08] },
+  { key: 'tronc', a: [0, 0.86, 0.07], b: [0, 1.42, 0.07] },
+  { key: 'tete', a: [0, 1.45, 0.07], b: [0, 1.63, 0.05] },
+  ...([1, -1] as const).flatMap((s) => {
+    const p = s === 1 ? 'r' : 'l', f = (v: V3): V3 => [v[0] * s, v[1], v[2]]
+    return [
+      { key: `${p}clav`, a: f([-0.03, 1.35, 0.11]), b: f([-0.15, 1.34, 0.07]) },
+      { key: `${p}bras`, a: f([-0.16, 1.322, 0.07]), b: f([-0.21, 1.052, 0.066]) },
+      { key: `${p}avbras`, a: f([-0.21, 1.052, 0.066]), b: f([-0.252, 0.815, 0.113]) },
+      { key: `${p}main`, a: f([-0.252, 0.815, 0.113]), b: f([-0.265, 0.68, 0.17]) },
+      { key: `${p}cuisse`, a: f([-0.083, 0.812, 0.09]), b: f([-0.075, 0.428, 0.066]) },
+      { key: `${p}jambe`, a: f([-0.075, 0.428, 0.066]), b: f([-0.075, 0.057, 0.066]) },
+      { key: `${p}pied`, a: f([-0.075, 0.057, 0.066]), b: f([-0.08, 0.01, 0.2]) },
+    ]
+  }),
+]
+/** Toutes les lignes sont fixes sauf celles qu'on rattache à un segment mobile. */
+export function skinLines(segs: Record<string, string>, extra: SkinLine[] = []): SkinLine[] {
+  return [...BASE.map((l) => ({ ...l, seg: segs[l.key] ?? 'fixed' })), ...extra]
+}

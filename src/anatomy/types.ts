@@ -122,6 +122,8 @@ export interface JointDef {
   segments: SegmentDef[]
   /** répartition des tissus déformables (muscles, peau) entre deux segments ; la première règle dont la région contient le sommet s'applique */
   blend: BlendRule | BlendRule[]
+  /** répartition de la peau : lignes osseuses rattachées aux segments (prioritaire sur `blend` pour la peau) */
+  skinLines?: { seg: string; a: V3; b: V3 }[]
   /** ajoute le côté gauche en miroir (rachis) */
   bilateral?: boolean
   /** zones de cartilage peintes sur les os */

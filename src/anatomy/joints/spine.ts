@@ -1,6 +1,6 @@
 // Rachis lombaire et cervical (les deux côtés). Chaque vertèbre prend une part du mouvement.
 import type { BlendRule, JointDef, SegmentDef, V3 } from '../types'
-import { ellipsoid } from './helpers'
+import { ellipsoid, skinLines } from './helpers'
 
 interface Level { seg: string; bone: string; pivot: V3; ratio: number; rot?: number; mid: number }
 
@@ -31,6 +31,11 @@ const LUMB: Level[] = [
 const lc = chain(LUMB, [1, 0, 0], 0.86, (x, y) => Math.abs(x) < 0.22 && y > 0.78)
 
 export const LUMBAR: JointDef = {
+  skinLines: [
+    ...skinLines({ tronc: 'T12', tete: 'T12', rclav: 'T12', lclav: 'T12', rbras: 'T12', lbras: 'T12', ravbras: 'T12', lavbras: 'T12', rmain: 'T12', lmain: 'T12' }).map((l) => (l.key === 'tronc' ? { ...l, a: [0, 1.09, 0.07] as V3 } : l)),
+    ...LUMB.map((l, i) => ({ seg: l.seg, key: l.seg, a: [0, l.pivot[1], 0.07] as V3, b: [0, i < LUMB.length - 1 ? LUMB[i + 1].pivot[1] : 1.09, 0.07] as V3 })),
+    { seg: 'fixed', key: 'sacrum', a: [0, 0.86, 0.07], b: [0, 0.919, 0.07] },
+  ],
   id: 'lombaire',
   label: 'Bas du dos',
   bilateral: true,
@@ -114,6 +119,10 @@ const cc = chain(CERV, [1, 0, 0], 1.36, (x, y) => Math.abs(x) < 0.2 && y > 1.33)
 const SKULL = ['frontal bone', 'sphenoid bone', 'right temporal bone', 'right parietal bone', 'right zygomatic bone', 'right maxilla', 'right nasal bone', 'mandible']
 
 export const CERVICAL: JointDef = {
+  skinLines: [
+    ...skinLines({ tete: 'tete' }).map((l) => (l.key === 'tronc' ? { ...l, b: [0, 1.38, 0.07] as V3 } : l)),
+    { seg: 'C5', key: 'cou', a: [0, 1.39, 0.07], b: [0, 1.45, 0.07] },
+  ],
   id: 'cervical',
   label: 'Cou',
   bilateral: true,

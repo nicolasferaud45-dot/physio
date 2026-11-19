@@ -176,7 +176,24 @@ function build(an: Anatomy, J: JointDef, pv: PathoVisual | null, pathologyId: st
     const restN = new Float32Array(nor.array as Float32Array)
     const w = new Float32Array(pos.count), sa = new Uint8Array(pos.count), sb = new Uint8Array(pos.count)
     const rigid = J.rigidMuscles?.[name]
-    for (let k = 0; k < pos.count; k++) {
+    const sl = kind === 'skin' && J.skinLines ? J.skinLines.map((l) => ({ i: segIdx(l.seg === 'fixed' ? undefined : l.seg), a: v3(l.a), b: v3(l.b) })) : null
+    if (sl) {
+      const ab = new THREE.Vector3(), ap = new THREE.Vector3()
+      for (let k = 0; k < pos.count; k++) {
+        const P = new THREE.Vector3(rest[k * 3], rest[k * 3 + 1], rest[k * 3 + 2])
+        let d1 = Infinity, d2 = Infinity, i1 = 0, i2 = 0
+        for (const L of sl) {
+          ab.subVectors(L.b, L.a); ap.subVectors(P, L.a)
+          const t = Math.max(0, Math.min(1, ap.dot(ab) / ab.lengthSq()))
+          const d = ap.addScaledVector(ab, -t).length()
+          if (d < d1) { if (L.i !== i1) { d2 = d1; i2 = i1 } d1 = d; i1 = L.i } else if (d < d2 && L.i !== i1) { d2 = d; i2 = L.i }
+        }
+        if (d2 === Infinity) { d2 = d1; i2 = i1 }
+        const p1 = 1 / Math.pow(d1 + 1e-4, 6), p2 = 1 / Math.pow(d2 + 1e-4, 6)
+        sa[k] = i1; sb[k] = i2; w[k] = p2 / (p1 + p2)
+      }
+    }
+    for (let k = 0; k < pos.count && !sl; k++) {
       if (rigid !== undefined) { const i = segIdx(rigid === 'fixed' ? undefined : rigid); sa[k] = i; sb[k] = i; w[k] = 0; continue }
       const r = weigh(rest[k * 3], rest[k * 3 + 1], rest[k * 3 + 2])
       w[k] = r.w; sa[k] = r.sa; sb[k] = r.sb

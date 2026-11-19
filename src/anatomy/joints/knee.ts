@@ -1,6 +1,7 @@
 // Genou droit (le côté gauche est obtenu par miroir). Repère : mètres, y haut, z avant, x négatif = dehors.
 import * as THREE from 'three'
 import type { JointDef, V3 } from '../types'
+import { skinLines } from './helpers'
 
 const K: V3 = [-0.075, 0.428, 0.066] // axe de flexion : centre des condyles fémoraux
 const PLATEAU_Y = 0.401
@@ -29,6 +30,7 @@ function plateauCartilage(cx: number, cz: number, rx: number, rz: number) {
 }
 
 export const KNEE: JointDef = {
+  skinLines: skinLines({ rjambe: 'leg', rpied: 'leg' }),
   id: 'genou',
   label: 'Genou',
   dofs: [{ id: 'flex', label: 'Flexion du genou', min: 0, max: 135, rest: 0, unit: '°' }],

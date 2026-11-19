@@ -1,6 +1,6 @@
 // Coude et poignet droits (avant-bras en supination : paume vers l'avant).
 import type { JointDef, V3 } from '../types'
-import { band, near } from './helpers'
+import { band, near, skinLines } from './helpers'
 
 const ELB: V3 = [-0.21, 1.052, 0.066]
 const WR: V3 = [-0.252, 0.815, 0.113]
@@ -25,6 +25,7 @@ const FOREARM_MUSCLES = [
 ]
 
 export const ELBOW: JointDef = {
+  skinLines: skinLines({ ravbras: 'forearm', rmain: 'hand' }),
   id: 'coude',
   label: 'Coude',
   dofs: [
@@ -84,6 +85,7 @@ export const ELBOW: JointDef = {
 }
 
 export const WRIST: JointDef = {
+  skinLines: skinLines({ rmain: 'hand' }),
   id: 'poignet',
   label: 'Poignet',
   dofs: [{ id: 'flex', label: 'Plier le poignet', min: -70, max: 75, rest: 0 }],
