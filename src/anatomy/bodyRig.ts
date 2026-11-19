@@ -125,7 +125,27 @@ export function buildBodyRig(an: Anatomy): BodyRig {
   const lines = LINES.map(([n, a, b]) => ({ i: names.indexOf(n), a: new THREE.Vector3(...a), b: new THREE.Vector3(...b) }))
   const softs: Soft[] = []
   const tmpP = new THREE.Vector3(), ab = new THREE.Vector3(), ap = new THREE.Vector3()
+  const AXIAL = new Set<BoneName>(['pelvis', 'lumbar', 'chest', 'neck'])
+  /** segments qu'un tissu a le droit de suivre (évite les nappes étirées entre tronc et membre) */
+  const allowedFor = (name: string, mirror: boolean): Set<BoneName> | null => {
+    const n = name.toLowerCase(), p = mirror ? 'l' : 'r'
+    const S = (...b: string[]) => new Set<BoneName>(b as BoneName[])
+    if (n === 'skin') return null
+    if (/abdominis|oblique|transversus|iliocostalis|longissimus|multifidus|spinalis|quadratus lumborum|rotator|semispinalis|splenius|longus colli|longus capitis|scalenus|sternocleidomastoid|rectus capitis|obliquus capitis|intercostal|diaphragm/.test(n)) return S('pelvis', 'lumbar', 'chest', 'neck')
+    if (/trapezius|rhomboid|levator scapulae|serratus|pectoralis minor|subclavius/.test(n)) return S('chest', 'neck', `${p}Girdle`)
+    if (/pectoralis major|latissimus|teres major/.test(n)) return S('chest', `${p}Girdle`, `${p}Shoulder`)
+    if (/deltoid|supraspinatus|infraspinatus|teres minor|subscapularis|coracobrachialis/.test(n)) return S(`${p}Girdle`, `${p}Shoulder`)
+    if (/biceps brachii|brachialis|triceps|anconeus/.test(n)) return S(`${p}Girdle`, `${p}Shoulder`, `${p}Elbow`)
+    if (/carpi|digit|pollicis|indicis|palmaris|pronator|supinator|brachioradialis/.test(n)) return S(`${p}Shoulder`, `${p}Elbow`, `${p}Hand`)
+    if (/gluteus|piriformis|gemellus|obturator|quadratus femoris|tensor fasciae|iliacus|psoas/.test(n)) return S('pelvis', 'lumbar', `${p}Hip`)
+    if (/vastus|rectus femoris|sartorius|gracilis|adductor|pectineus|biceps femoris|semitendinosus|semimembranosus/.test(n)) return S('pelvis', `${p}Hip`, `${p}Knee`)
+    if (/gastrocnemius|soleus|plantaris|popliteus|tibialis|fibularis|extensor digitorum longus|extensor hallucis|flexor digitorum longus|flexor hallucis|calcaneal/.test(n)) return S(`${p}Hip`, `${p}Knee`, `${p}Ankle`)
+    return null
+  }
+  void AXIAL
   const makeSoft = (name: string, mirror: boolean, mat: THREE.Material): Soft | null => {
+    const allow = allowedFor(name, mirror)
+    const lineSet = allow ? lines.filter((L) => allow.has(names[L.i])) : lines
     const g0 = an.geometry(name); if (!g0) return null
     const g = g0.clone()
     const pos = g.getAttribute('position') as THREE.BufferAttribute
@@ -136,13 +156,14 @@ export function buildBodyRig(an: Anatomy): BodyRig {
     for (let k = 0; k < n; k++) {
       tmpP.set(pos.getX(k), pos.getY(k), pos.getZ(k))
       let d1 = Infinity, d2 = Infinity, i1 = 0, i2 = 0
-      for (const L of lines) {
+      for (const L of lineSet) {
         ab.subVectors(L.b, L.a); ap.subVectors(tmpP, L.a)
         const t = Math.max(0, Math.min(1, ap.dot(ab) / ab.lengthSq()))
         const d = ap.addScaledVector(ab, -t).length()
         if (d < d1) { if (L.i !== i1) { d2 = d1; i2 = i1 } d1 = d; i1 = L.i } else if (d < d2 && L.i !== i1) { d2 = d; i2 = L.i }
       }
-      const p1 = 1 / Math.pow(d1 + 1e-4, 4), p2 = 1 / Math.pow(d2 + 1e-4, 4)
+      if (d2 === Infinity) { d2 = d1; i2 = i1 }
+      const p1 = 1 / Math.pow(d1 + 1e-4, 6), p2 = 1 / Math.pow(d2 + 1e-4, 6)
       a[k] = i1; b[k] = i2; w[k] = p2 / (p1 + p2)
       rest[k * 3] = tmpP.x + DELTA.x - rootRest.x; rest[k * 3 + 1] = tmpP.y + DELTA.y - rootRest.y; rest[k * 3 + 2] = tmpP.z + DELTA.z - rootRest.z
     }

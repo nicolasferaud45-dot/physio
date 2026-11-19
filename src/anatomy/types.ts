@@ -67,7 +67,7 @@ export interface CustomDef {
 }
 
 export type MuscleGroup = 'extensor' | 'flexor' | 'other'
-export interface MuscleDef { name: string; label: string; simple: string; group: MuscleGroup; unit?: string }
+export interface MuscleDef { name: string; label: string; simple: string; group: MuscleGroup; unit?: string; /** suit un seul segment (pas de déformation) */ rigid?: string }
 export interface UnitDef { id: string; label: string; simple: string }
 
 export interface FrictionDef { id: string; label: string; at: { seg: string; p: V3 }; window: [number, number]; arrow: V3 }
@@ -114,6 +114,8 @@ export interface JointDef {
   /** groupes fonctionnels (une étiquette par groupe) */
   units: UnitDef[]
   extraMuscles?: string[]
+  /** muscles qui ne se déforment pas (tronc) : suivent un seul segment ou restent fixes */
+  rigidMuscles?: Record<string, string>
   tendons?: string[]
   /** disques intervertébraux (déformables, aspect cartilage) */
   discs?: string[]

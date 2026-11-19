@@ -37,10 +37,6 @@ export const SHOULDER: JointDef = {
     { name: 'right serratus anterior', label: 'Dentelé antérieur', simple: 'Muscle qui plaque l\'omoplate', group: 'flexor', unit: 'dentele' },
     { name: 'long head of right biceps brachii', label: 'Biceps (long chef)', simple: 'Biceps', group: 'other', unit: 'biceps' },
     { name: 'short head of right biceps brachii', label: 'Biceps (court chef)', simple: 'Biceps', group: 'other', unit: 'biceps' },
-    { name: 'clavicular part of right pectoralis major', label: 'Grand pectoral', simple: 'Muscle de la poitrine', group: 'extensor', unit: 'pectoral' },
-    { name: 'sternocostal part of right pectoralis major', label: 'Grand pectoral', simple: 'Muscle de la poitrine', group: 'extensor', unit: 'pectoral' },
-    { name: 'right latissimus dorsi', label: 'Grand dorsal', simple: 'Grand muscle du dos', group: 'extensor', unit: 'dorsal' },
-    { name: 'right teres major', label: 'Grand rond', simple: 'Muscle sous l\'omoplate', group: 'extensor', unit: 'dorsal' },
   ],
   units: [
     { id: 'coiffe', label: 'Coiffe des rotateurs', simple: 'Tendons qui tiennent la tête de l\'humérus' },
@@ -48,17 +44,16 @@ export const SHOULDER: JointDef = {
     { id: 'trapeze', label: 'Trapèze', simple: 'Muscle qui monte l\'omoplate' },
     { id: 'dentele', label: 'Dentelé antérieur', simple: 'Muscle qui plaque l\'omoplate' },
     { id: 'biceps', label: 'Biceps', simple: 'Biceps' },
-    { id: 'pectoral', label: 'Grand pectoral', simple: 'Muscle de la poitrine' },
-    { id: 'dorsal', label: 'Grand dorsal et grand rond', simple: 'Muscles qui abaissent le bras' },
   ],
-  extraMuscles: ['right rhomboid major', 'right rhomboid minor', 'right levator scapulae', 'transverse part of right trapezius', 'right coracobrachialis', 'long head of right triceps brachii', 'lateral head of right triceps brachii', 'right pectoralis minor'],
+  extraMuscles: ['right coracobrachialis', 'long head of right triceps brachii', 'lateral head of right triceps brachii'],
+  rigidMuscles: { 'descending part of right trapezius': 'fixed', 'ascending part of right trapezius': 'fixed', 'right serratus anterior': 'fixed' },
   segments: [
-    { id: 'scap', pivot: SC, axis: [0, 0, -1], dof: 'abd', ratio: 0.33, alt: [{ dof: 'flex', axis: [0.5, 0, -0.85], ratio: 0.3 }] },
-    { id: 'arm', parent: 'scap', pivot: GH, axis: [0, 0, -1], dof: 'abd', ratio: 0.67, alt: [{ dof: 'flex', axis: [-1, 0, 0], ratio: 0.7 }, { dof: 'rot', axis: [0, 1, 0], ratio: -1 }] },
+    { id: 'scap', pivot: SC, axis: [0, 0, -1], dof: 'abd', ratio: 0.16, alt: [{ dof: 'flex', axis: [0.5, 0, -0.85], ratio: 0.14 }] },
+    { id: 'arm', parent: 'scap', pivot: GH, axis: [0, 0, -1], dof: 'abd', ratio: 0.84, alt: [{ dof: 'flex', axis: [-1, 0, 0], ratio: 0.86 }, { dof: 'rot', axis: [0, 1, 0], ratio: -1 }] },
   ],
   blend: [
     { from: 'scap', seg: 'arm', center: GH, dir: [0.55, 0.83, 0], band: 0.028, inRegion: (x, y) => x < -0.13 && y > 0.95 && y < 1.42 },
-    { seg: 'scap', center: [-0.075, 1.33, 0.07], dir: [1, 0, 0], band: 0.05, inRegion: (x, y) => x < 0.0 && y > 1.12 },
+    { seg: 'scap', center: [-0.11, 1.33, 0.07], dir: [1, 0, 0], band: 0.03, inRegion: (x, y) => x < -0.06 && y > 1.12 },
   ],
   cartilage: [
     { bone: 'right humerus', test: (x, y, z) => near(GH, 0.029)(x, y, z) && x > -0.168 && y > 1.3 },

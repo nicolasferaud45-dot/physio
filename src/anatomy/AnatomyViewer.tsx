@@ -175,7 +175,9 @@ function build(an: Anatomy, J: JointDef, pv: PathoVisual | null, pathologyId: st
     const rest = new Float32Array(pos.array as Float32Array)
     const restN = new Float32Array(nor.array as Float32Array)
     const w = new Float32Array(pos.count), sa = new Uint8Array(pos.count), sb = new Uint8Array(pos.count)
+    const rigid = J.rigidMuscles?.[name]
     for (let k = 0; k < pos.count; k++) {
+      if (rigid !== undefined) { const i = segIdx(rigid === 'fixed' ? undefined : rigid); sa[k] = i; sb[k] = i; w[k] = 0; continue }
       const r = weigh(rest[k * 3], rest[k * 3 + 1], rest[k * 3 + 2])
       w[k] = r.w; sa[k] = r.sa; sb[k] = r.sb
     }
@@ -756,7 +758,7 @@ function Scene(p: ViewerProps & { an: Anatomy; labelSink: React.MutableRefObject
     // repère monde (miroir, éclaté) appliqué aux étiquettes
     built.root.updateMatrixWorld()
     const all = built.copies[0].group
-    p.labelSink.current = (p.labels || p.indicators) ? labels.filter((l) => l.visible && (p.labels || l.tone !== 'info' || l.id === 'arc')).map((l) => ({ ...l, world: l.world.clone().applyMatrix4(all.matrixWorld) })) : []
+    p.labelSink.current = p.labels ? labels.filter((l) => l.visible).map((l) => ({ ...l, world: l.world.clone().applyMatrix4(all.matrixWorld) })) : []
     p.onFrame()
   })
 
