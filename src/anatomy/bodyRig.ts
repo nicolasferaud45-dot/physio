@@ -78,7 +78,7 @@ const BILAT: Partial<Record<MuscleId, string[]>> = {
   paravertebraux: ['right iliocostalis lumborum', 'right iliocostalis thoracis', 'right longissimus thoracis', 'right multifidus', 'right spinalis thoracis'],
 }
 
-interface Soft { mesh: THREE.Mesh; rest: Float32Array; restN: Float32Array; a: Uint8Array; b: Uint8Array; w: Float32Array; owner?: THREE.Mesh }
+interface Soft { name?: string; mesh: THREE.Mesh; rest: Float32Array; restN: Float32Array; a: Uint8Array; b: Uint8Array; w: Float32Array; owner?: THREE.Mesh }
 export interface BodyRig extends Rig { update: () => void; isBody: true }
 
 export function buildBodyRig(an: Anatomy): BodyRig {
@@ -127,7 +127,7 @@ export function buildBodyRig(an: Anatomy): BodyRig {
   const tmpP = new THREE.Vector3(), ab = new THREE.Vector3(), ap = new THREE.Vector3()
   const AXIAL = new Set<BoneName>(['pelvis', 'lumbar', 'chest', 'neck'])
   /** segments qu'un tissu a le droit de suivre (évite les nappes étirées entre tronc et membre) */
-  const allowedFor = (name: string, mirror: boolean): Set<BoneName> | null => {
+  const allowedFor = (name: string, mirror: boolean, c: THREE.Vector3): Set<BoneName> | null => {
     const n = name.toLowerCase(), p = mirror ? 'l' : 'r'
     const S = (...b: string[]) => new Set<BoneName>(b as BoneName[])
     if (n === 'skin') return null
@@ -136,19 +136,31 @@ export function buildBodyRig(an: Anatomy): BodyRig {
     if (/pectoralis major|latissimus|teres major/.test(n)) return S('chest', `${p}Girdle`, `${p}Shoulder`)
     if (/deltoid|supraspinatus|infraspinatus|teres minor|subscapularis|coracobrachialis/.test(n)) return S(`${p}Girdle`, `${p}Shoulder`)
     if (/biceps brachii|brachialis|triceps|anconeus/.test(n)) return S(`${p}Girdle`, `${p}Shoulder`, `${p}Elbow`)
-    if (/carpi|digit|pollicis|indicis|palmaris|pronator|supinator|brachioradialis/.test(n)) return S(`${p}Shoulder`, `${p}Elbow`, `${p}Hand`)
+    // jambe et pied d'abord : « extensor digitorum longus » est un muscle de la jambe, pas de l'avant-bras
+    if (c.y < 0.55 && /digitorum|hallucis|plantae|plantar|lumbrical|interosse|pedis|\bfoot\b|\btoe\b/.test(n)) return S(`${p}Knee`, `${p}Ankle`)
+    if (c.y > 0.55 && /carpi|digit|pollicis|indicis|palmaris|pronator|supinator|brachioradialis/.test(n)) return S(`${p}Shoulder`, `${p}Elbow`, `${p}Hand`)
     if (/gluteus|piriformis|gemellus|obturator|quadratus femoris|tensor fasciae|iliacus|psoas/.test(n)) return S('pelvis', 'lumbar', `${p}Hip`)
     if (/vastus|rectus femoris|sartorius|gracilis|adductor|pectineus|biceps femoris|semitendinosus|semimembranosus/.test(n)) return S('pelvis', `${p}Hip`, `${p}Knee`)
-    if (/gastrocnemius|soleus|plantaris|popliteus|tibialis|fibularis|extensor digitorum longus|extensor hallucis|flexor digitorum longus|flexor hallucis|calcaneal/.test(n)) return S(`${p}Hip`, `${p}Knee`, `${p}Ankle`)
-    return null
+    if (c.y < 0.62 && /gastrocnemius|soleus|plantaris|popliteus|tibialis|fibularis|extensor hallucis|flexor hallucis|calcaneal/.test(n)) return S(`${p}Hip`, `${p}Knee`, `${p}Ankle`)
+    if (/iliotibial/.test(n)) return S('pelvis', `${p}Hip`, `${p}Knee`)
+    if (/costal|sternum|\brib\b/.test(n)) return S('chest')
+    // par défaut, d'après la position : un tissu du tronc ne suit jamais le bras qui pend à côté,
+    // un tissu de la jambe ne suit jamais la main posée contre la cuisse
+    const q = c.x > 0 ? 'l' : 'r'
+    if (Math.abs(c.x) > 0.165 && c.y > 0.62 && c.y < 1.36) return S(`${q}Girdle`, `${q}Shoulder`, `${q}Elbow`, `${q}Hand`)
+    if (c.y < 0.8) return S('pelvis', `${q}Hip`, `${q}Knee`, `${q}Ankle`)
+    return S('pelvis', 'lumbar', 'chest', 'neck', 'rGirdle', 'lGirdle')
   }
   void AXIAL
   const makeSoft = (name: string, mirror: boolean, mat: THREE.Material): Soft | null => {
-    const allow = allowedFor(name, mirror)
-    const lineSet = allow ? lines.filter((L) => allow.has(names[L.i])) : lines
     const g0 = an.geometry(name); if (!g0) return null
     const g = g0.clone()
     const pos = g.getAttribute('position') as THREE.BufferAttribute
+    const cen = new THREE.Vector3()
+    for (let k = 0; k < pos.count; k++) cen.x += pos.getX(k), cen.y += pos.getY(k), cen.z += pos.getZ(k)
+    cen.divideScalar(Math.max(1, pos.count)); if (mirror) cen.x = -cen.x
+    const allow = allowedFor(name, mirror, cen)
+    const lineSet = allow ? lines.filter((L) => allow.has(names[L.i])) : lines
     if (mirror) { for (let k = 0; k < pos.count; k++) pos.setX(k, -pos.getX(k)); const idx = g.getIndex()!; for (let f = 0; f < idx.count; f += 3) { const a = idx.getX(f + 1); idx.setX(f + 1, idx.getX(f + 2)); idx.setX(f + 2, a) } g.computeVertexNormals() }
     const n = pos.count
     const a = new Uint8Array(n), b = new Uint8Array(n), w = new Float32Array(n)
@@ -171,7 +183,7 @@ export function buildBodyRig(an: Anatomy): BodyRig {
     const mesh = new THREE.Mesh(g, mat)
     mesh.frustumCulled = false
     root.add(mesh)
-    const s: Soft = { mesh, rest, restN: new Float32Array(nor.array as Float32Array), a, b, w }
+    const s: Soft = { name: (mirror ? 'L:' : 'R:') + name, mesh, rest, restN: new Float32Array(nor.array as Float32Array), a, b, w }
     softs.push(s)
     return s
   }

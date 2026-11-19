@@ -32,7 +32,7 @@ const lc = chain(LUMB, [1, 0, 0], 0.86, (x, y) => Math.abs(x) < 0.22 && y > 0.78
 
 export const LUMBAR: JointDef = {
   skinLines: [
-    ...skinLines({ tronc: 'T12', tete: 'T12', rclav: 'T12', lclav: 'T12', rbras: 'T12', lbras: 'T12', ravbras: 'T12', lavbras: 'T12', rmain: 'T12', lmain: 'T12' }).map((l) => (l.key === 'tronc' ? { ...l, a: [0, 1.09, 0.07] as V3 } : l)),
+    ...skinLines({ tronc: 'T12', tete: 'T12', rclav: 'T12', lclav: 'T12', rbras: 'T12', lbras: 'T12', ravbras: 'T12', lavbras: 'T12', rmain: 'T12', lmain: 'T12', rscap: 'T12', lscap: 'T12', rflanc: 'T12', lflanc: 'T12' }).map((l) => (l.key === 'tronc' ? { ...l, a: [0, 1.09, 0.07] as V3 } : l)),
     ...LUMB.map((l, i) => ({ seg: l.seg, key: l.seg, a: [0, l.pivot[1], 0.07] as V3, b: [0, i < LUMB.length - 1 ? LUMB[i + 1].pivot[1] : 1.09, 0.07] as V3 })),
     { seg: 'fixed', key: 'sacrum', a: [0, 0.86, 0.07], b: [0, 0.919, 0.07] },
   ],

@@ -8,7 +8,7 @@ const GLENOID: V3 = [-0.142, 1.321, 0.069]
 const ACROMION: V3 = [-0.162, 1.353, 0.072]
 
 export const SHOULDER: JointDef = {
-  skinLines: skinLines({ rclav: 'scap', rbras: 'arm', ravbras: 'arm', rmain: 'arm' }),
+  skinLines: skinLines({ rclav: 'scap', rscap: 'scap', rbras: 'arm', ravbras: 'arm', rmain: 'arm' }),
   id: 'epaule',
   label: 'Épaule',
   dofs: [

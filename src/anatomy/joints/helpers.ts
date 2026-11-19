@@ -46,6 +46,12 @@ const BASE: Omit<SkinLine, 'seg'>[] = [
     const p = s === 1 ? 'r' : 'l', f = (v: V3): V3 => [v[0] * s, v[1], v[2]]
     return [
       { key: `${p}clav`, a: f([-0.03, 1.35, 0.11]), b: f([-0.15, 1.34, 0.07]) },
+      // omoplate (bord médial, corps vers la glène) et flanc : sans eux, les muscles de l'omoplate
+      // et la peau du flanc sont « attrapés » par l'humérus voisin et partent en nappe avec le bras
+      { key: `${p}scap`, a: f([-0.066, 1.21, 0.0]), b: f([-0.074, 1.34, 0.01]) },
+      { key: `${p}scap`, a: f([-0.085, 1.21, 0.0]), b: f([-0.138, 1.305, 0.062]) },
+      { key: `${p}scap`, a: f([-0.085, 1.29, 0.01]), b: f([-0.138, 1.318, 0.066]) },
+      { key: `${p}flanc`, a: f([-0.125, 1.02, 0.075]), b: f([-0.12, 1.24, 0.075]) },
       { key: `${p}bras`, a: f([-0.16, 1.322, 0.07]), b: f([-0.21, 1.052, 0.066]) },
       { key: `${p}avbras`, a: f([-0.21, 1.052, 0.066]), b: f([-0.252, 0.815, 0.113]) },
       { key: `${p}main`, a: f([-0.252, 0.815, 0.113]), b: f([-0.265, 0.68, 0.17]) },

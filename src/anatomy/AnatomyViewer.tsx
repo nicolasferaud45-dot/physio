@@ -176,7 +176,10 @@ function build(an: Anatomy, J: JointDef, pv: PathoVisual | null, pathologyId: st
     const restN = new Float32Array(nor.array as Float32Array)
     const w = new Float32Array(pos.count), sa = new Uint8Array(pos.count), sb = new Uint8Array(pos.count)
     const rigid = J.rigidMuscles?.[name]
-    const sl = kind === 'skin' && J.skinLines ? J.skinLines.map((l) => ({ i: segIdx(l.seg === 'fixed' ? undefined : l.seg), a: v3(l.a), b: v3(l.b) })) : null
+    // peau et muscles (hors colonne) : chaque point suit l'os le plus proche, mélange seulement entre deux os voisins
+    const useLines = J.skinLines && (kind === 'skin' || (kind === 'muscle' && rigid === undefined && !J.bilateral))
+    const pw = kind === 'skin' ? 6 : 4
+    const sl = useLines ? J.skinLines!.map((l) => ({ i: segIdx(l.seg === 'fixed' ? undefined : l.seg), a: v3(l.a), b: v3(l.b) })) : null
     if (sl) {
       const ab = new THREE.Vector3(), ap = new THREE.Vector3()
       for (let k = 0; k < pos.count; k++) {
@@ -189,7 +192,7 @@ function build(an: Anatomy, J: JointDef, pv: PathoVisual | null, pathologyId: st
           if (d < d1) { if (L.i !== i1) { d2 = d1; i2 = i1 } d1 = d; i1 = L.i } else if (d < d2 && L.i !== i1) { d2 = d; i2 = L.i }
         }
         if (d2 === Infinity) { d2 = d1; i2 = i1 }
-        const p1 = 1 / Math.pow(d1 + 1e-4, 6), p2 = 1 / Math.pow(d2 + 1e-4, 6)
+        const p1 = 1 / Math.pow(d1 + 1e-4, pw), p2 = 1 / Math.pow(d2 + 1e-4, pw)
         sa[k] = i1; sb[k] = i2; w[k] = p2 / (p1 + p2)
       }
     }
